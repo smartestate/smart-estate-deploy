@@ -146,12 +146,12 @@ prompt_value() {
   local response=""
 
   if [[ -n "${default_value}" ]]; then
-    printf '%s%s%s [%s]: ' "${BOLD}" "${CYAN}" "${label}" "${default_value}"
+    printf '%s%s%s [%s]: %s' "${BOLD}" "${CYAN}" "${label}" "${default_value}" "${RESET}" >&2
   else
-    printf '%s%s%s: ' "${BOLD}" "${CYAN}" "${label}"
+    printf '%s%s%s: %s' "${BOLD}" "${CYAN}" "${label}" "${RESET}" >&2
   fi
 
-  read -r response
+  read -r response < /dev/tty
   printf '%s' "${response:-${default_value}}"
 }
 
@@ -159,9 +159,10 @@ prompt_secret_value() {
   local label="$1"
   local response=""
 
-  printf '%s%s%s: ' "${BOLD}" "${CYAN}" "${label}"
-  read -r -s response
-  printf '\n%s' "${response}"
+  printf '%s%s%s: %s' "${BOLD}" "${CYAN}" "${label}" "${RESET}" >&2
+  read -r -s response < /dev/tty
+  printf '\n' >&2
+  printf '%s' "${response}"
 }
 
 get_env_value() {
