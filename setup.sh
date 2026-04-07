@@ -260,6 +260,28 @@ wait_for_dns_match() {
   return 1
 }
 
+wait_for_http_ok() {
+  local url="$1"
+  local timeout_seconds="${2:-90}"
+  local interval_seconds="${3:-3}"
+  local elapsed_seconds=0
+
+  while (( elapsed_seconds <= timeout_seconds )); do
+    if curl -fsS "${url}" >/dev/null; then
+      return 0
+    fi
+
+    if (( elapsed_seconds == timeout_seconds )); then
+      break
+    fi
+
+    sleep "${interval_seconds}"
+    elapsed_seconds=$((elapsed_seconds + interval_seconds))
+  done
+
+  return 1
+}
+
 print_usage() {
   cat <<'EOF'
 Usage: ./setup.sh [options]
@@ -597,7 +619,8 @@ cd "${DEPLOY_ROOT}"
 
 section "Validation"
 note "Running post-deploy smoke checks..."
-if curl -fsS "http://127.0.0.1:8000/health" >/dev/null; then
+note "Waiting for backend readiness on localhost (up to 90s)..."
+if wait_for_http_ok "http://127.0.0.1:8000/health" 90 3; then
   ok "Backend is healthy on localhost:8000"
 else
   warn "Backend health check failed on localhost:8000"
@@ -620,7 +643,8 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
     note "Running SSL provisioning now that DNS points to this VPS..."
     "${CERTBOT_CMD[@]}"
 
-    if curl -fsS "https://${API_DOMAIN}/health" >/dev/null; then
+    note "Waiting for API HTTPS readiness (up to 90s)..."
+    if wait_for_http_ok "https://${API_DOMAIN}/health" 90 3; then
       ok "API HTTPS health check passed"
     else
       warn "API HTTPS health check failed after certificate provisioning"
@@ -646,7 +670,8 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
       note "Running SSL provisioning after DNS propagation wait..."
       "${CERTBOT_CMD[@]}"
 
-      if curl -fsS "https://${API_DOMAIN}/health" >/dev/null; then
+      note "Waiting for API HTTPS readiness (up to 90s)..."
+      if wait_for_http_ok "https://${API_DOMAIN}/health" 90 3; then
         ok "API HTTPS health check passed"
       else
         warn "API HTTPS health check failed after certificate provisioning"
@@ -657,13 +682,17 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
     fi
   fi
 
-  CORS_HEADERS="$(curl -sS -D - -o /dev/null -X OPTIONS "https://${API_DOMAIN}/auth/login" -H "Origin: https://${APP_DOMAIN}" -H "Access-Control-Request-Method: POST" || true)"
-  if printf '%s' "${CORS_HEADERS}" | grep -iq "access-control-allow-origin: https://${APP_DOMAIN}"; then
-    ok "CORS preflight looks correct for app domain"
+  if wait_for_http_ok "https://${API_DOMAIN}/health" 30 3; then
+    CORS_HEADERS="$(curl -sS -D - -o /dev/null -X OPTIONS "https://${API_DOMAIN}/auth/login" -H "Origin: https://${APP_DOMAIN}" -H "Access-Control-Request-Method: POST" || true)"
+    if printf '%s' "${CORS_HEADERS}" | grep -iq "access-control-allow-origin: https://${APP_DOMAIN}"; then
+      ok "CORS preflight looks correct for app domain"
+    else
+      warn "CORS preflight did not return expected allow-origin"
+      note "Expected origin: https://${APP_DOMAIN}"
+      note "Current CORS_ORIGINS in ${ENV_FILE}: $(grep -E '^CORS_ORIGINS=' "${ENV_FILE}" | cut -d= -f2-)"
+    fi
   else
-    warn "CORS preflight did not return expected allow-origin"
-    note "Expected origin: https://${APP_DOMAIN}"
-    note "Current CORS_ORIGINS in ${ENV_FILE}: $(grep -E '^CORS_ORIGINS=' "${ENV_FILE}" | cut -d= -f2-)"
+    warn "Skipping CORS preflight check because API HTTPS health is not ready"
   fi
 else
   CORS_HEADERS="$(curl -sS -D - -o /dev/null -X OPTIONS "http://${API_DOMAIN}:8000/auth/login" -H "Origin: http://${APP_DOMAIN}:3000" -H "Access-Control-Request-Method: POST" || true)"
