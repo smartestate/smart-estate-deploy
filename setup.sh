@@ -51,6 +51,33 @@ resolve_ipv4() {
   getent ahostsv4 "${hostname}" 2>/dev/null | awk 'NR==1 { print $1 }'
 }
 
+wait_for_dns_match() {
+  local hostname="$1"
+  local expected_ip="$2"
+  local timeout_seconds="${3:-300}"
+  local interval_seconds="${4:-15}"
+  local elapsed_seconds=0
+  local resolved_ip=""
+
+  while (( elapsed_seconds <= timeout_seconds )); do
+    resolved_ip="$(resolve_ipv4 "${hostname}")"
+    if [[ -n "${resolved_ip}" && "${resolved_ip}" == "${expected_ip}" ]]; then
+      printf '%s' "${resolved_ip}"
+      return 0
+    fi
+
+    if (( elapsed_seconds == timeout_seconds )); then
+      break
+    fi
+
+    sleep "${interval_seconds}"
+    elapsed_seconds=$((elapsed_seconds + interval_seconds))
+  done
+
+  printf '%s' "${resolved_ip}"
+  return 1
+}
+
 prompt_default() {
   local prompt_text="$1"
   local default_value="$2"
@@ -383,7 +410,31 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
     echo "         API resolves to: ${API_DNS_IP:-<unresolved>}"
     echo "         App resolves to: ${APP_DNS_IP:-<unresolved>}"
     echo "         Current VPS IP: ${CURRENT_IP}"
-    echo "         SSL provisioning was skipped for now. Re-run setup after DNS propagates."
+    echo "         Waiting up to 5 minutes for DNS propagation before skipping SSL..."
+
+    API_DNS_IP="$(wait_for_dns_match "${API_DOMAIN}" "${CURRENT_IP}" 300 15 || true)"
+    APP_DNS_IP="$(wait_for_dns_match "${APP_DOMAIN}" "${CURRENT_IP}" 300 15 || true)"
+
+    if [[ -n "${API_DNS_IP}" && -n "${APP_DNS_IP}" && "${API_DNS_IP}" == "${CURRENT_IP}" && "${APP_DNS_IP}" == "${CURRENT_IP}" ]]; then
+      CERTBOT_CMD=(certbot --nginx -d "${API_DOMAIN}" -d "${APP_DOMAIN}" --non-interactive --agree-tos)
+      if [[ -n "${CERTBOT_EMAIL}" ]]; then
+        CERTBOT_CMD+=(--email "${CERTBOT_EMAIL}")
+      else
+        CERTBOT_CMD+=(--register-unsafely-without-email)
+      fi
+
+      echo "Running SSL provisioning after DNS propagation wait..."
+      "${CERTBOT_CMD[@]}"
+
+      if curl -fsS "https://${API_DOMAIN}/health" >/dev/null; then
+        echo "  [ok] API HTTPS health check passed"
+      else
+        echo "  [warn] API HTTPS health check failed after certificate provisioning"
+      fi
+    else
+      echo "  [warn] DNS still does not resolve to this VPS after waiting"
+      echo "         SSL provisioning was skipped for now. Re-run setup after DNS propagates."
+    fi
   fi
 
   CORS_HEADERS="$(curl -sS -D - -o /dev/null -X OPTIONS "https://${API_DOMAIN}/auth/login" -H "Origin: https://${APP_DOMAIN}" -H "Access-Control-Request-Method: POST" || true)"
