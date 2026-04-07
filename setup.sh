@@ -20,11 +20,12 @@ if [[ -t 1 ]]; then
   RESET=$'\033[0m'
   BOLD=$'\033[1m'
   DIM=$'\033[2m'
-  ORANGE=$'\033[38;5;208m'
-  CYAN=$'\033[38;5;81m'
-  GREEN=$'\033[38;5;70m'
-  YELLOW=$'\033[38;5;214m'
-  RED=$'\033[38;5;203m'
+  ORANGE=$'\033[38;2;188;183;251m'
+  CYAN=$'\033[38;2;153;177;255m'
+  GREEN=$'\033[38;2;153;177;255m'
+  YELLOW=$'\033[38;2;188;183;251m'
+  RED=$'\033[38;2;249;250;250m'
+  LIGHT=$'\033[38;2;249;250;250m'
 else
   RESET=''
   BOLD=''
@@ -34,6 +35,7 @@ else
   GREEN=''
   YELLOW=''
   RED=''
+  LIGHT=''
 fi
 
 section() {
@@ -52,6 +54,11 @@ warn() {
   printf '%s[warn]%s %s\n' "${YELLOW}" "${RESET}" "$1"
 }
 
+fail() {
+  printf '%s[error]%s %s\n' "${RED}" "${RESET}" "$1"
+  exit 1
+}
+
 summary_box() {
   local title="$1"
   shift
@@ -59,13 +66,13 @@ summary_box() {
   local border
   border="$(printf '%*s' "${width}" '' | tr ' ' '-')"
 
-  printf '\n+%s+\n' "${border}"
-  printf '| %-*s |\n' "$((width - 2))" "${title}"
-  printf '+%s+\n' "${border}"
+  printf '\n%s+%s+%s\n' "${LIGHT}" "${border}" "${RESET}"
+  printf '%s| %-*s |%s\n' "${LIGHT}" "$((width - 2))" "${title}" "${RESET}"
+  printf '%s+%s+%s\n' "${LIGHT}" "${border}" "${RESET}"
   for line in "$@"; do
-    printf '| %-*s |\n' "$((width - 2))" "${line}"
+    printf '%s| %-*s |%s\n' "${LIGHT}" "$((width - 2))" "${line}" "${RESET}"
   done
-  printf '+%s+\n' "${border}"
+  printf '%s+%s+%s\n' "${LIGHT}" "${border}" "${RESET}"
 }
 
 headline() {
@@ -168,20 +175,6 @@ wait_for_dns_match() {
   return 1
 }
 
-prompt_default() {
-  local prompt_text="$1"
-  local default_value="$2"
-  local response=""
-
-  if [[ -n "${default_value}" ]]; then
-    read -r -p "${prompt_text} [${default_value}]: " response
-    printf '%s' "${response:-${default_value}}"
-  else
-    read -r -p "${prompt_text}: " response
-    printf '%s' "${response}"
-  fi
-}
-
 headline
 note "This setup will configure Docker, Nginx, Certbot, firewall, and app deployment."
 
@@ -240,11 +233,11 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
   if [[ -n "${EXISTING_API_DOMAIN}" && -n "${EXISTING_APP_DOMAIN}" ]]; then
     API_DOMAIN="${EXISTING_API_DOMAIN}"
     APP_DOMAIN="${EXISTING_APP_DOMAIN}"
-    echo "Keeping existing API_DOMAIN and APP_DOMAIN from ${ENV_FILE}."
+    ok "Keeping existing API_DOMAIN and APP_DOMAIN from ${ENV_FILE}."
   elif [[ -n "${EXISTING_VITE_API_URL}" && -n "${EXISTING_CORS_ORIGINS}" ]]; then
     API_DOMAIN="$(extract_host_from_url "${EXISTING_VITE_API_URL}")"
     APP_DOMAIN="$(printf '%s' "${EXISTING_CORS_ORIGINS}" | cut -d, -f1 | sed -E 's#^https?://##; s#/.*$##; s/:.*$##')"
-    echo "Derived API_DOMAIN and APP_DOMAIN from existing deployment settings."
+    ok "Derived API_DOMAIN and APP_DOMAIN from existing deployment settings."
   else
     API_DOMAIN="$(prompt_value "API domain" "api.your-domain.com")"
 
@@ -330,9 +323,7 @@ if docker compose version >/dev/null 2>&1; then
 elif command -v docker-compose >/dev/null 2>&1; then
   COMPOSE_CMD=(docker-compose)
 else
-  echo "Error: Docker Compose is not installed."
-  echo "Install one of: docker-compose-plugin, docker-compose-v2, or docker-compose"
-  exit 1
+  fail "Docker Compose is not installed. Install one of: docker-compose-plugin, docker-compose-v2, or docker-compose"
 fi
 
 mkdir -p "${DEPLOY_ROOT}" "${DEPLOY_ROOT}/uploads" "${DEPLOY_ROOT}/saved_models"
@@ -367,13 +358,11 @@ clone_or_pull "${BACKEND_REPO}" "${DEPLOY_ROOT}/smart-estate-backend"
 clone_or_pull "${DASHBOARD_REPO}" "${DEPLOY_ROOT}/smart-estate-dashboard"
 
 if [[ ! -f "${DEPLOY_ROOT}/smart-estate-backend/Dockerfile" ]]; then
-  echo "Error: backend Dockerfile missing in ${DEPLOY_ROOT}/smart-estate-backend"
-  exit 1
+  fail "Backend Dockerfile missing in ${DEPLOY_ROOT}/smart-estate-backend"
 fi
 
 if [[ ! -f "${DEPLOY_ROOT}/smart-estate-dashboard/Dockerfile" ]]; then
-  echo "Error: dashboard Dockerfile missing in ${DEPLOY_ROOT}/smart-estate-dashboard"
-  exit 1
+  fail "Dashboard Dockerfile missing in ${DEPLOY_ROOT}/smart-estate-dashboard"
 fi
 
 if [[ -n "${EXISTING_CORS_ORIGINS}" ]]; then
@@ -454,7 +443,7 @@ EOF
 ln -sf /etc/nginx/sites-available/smartestate /etc/nginx/sites-enabled/smartestate
 nginx -t && systemctl reload nginx
 
-echo "Starting stack with Docker Compose..."
+note "Starting stack with Docker Compose..."
 cd "${DEPLOY_ROOT}"
 "${COMPOSE_CMD[@]}" --env-file .env up -d --build
 
