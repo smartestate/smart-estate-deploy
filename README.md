@@ -72,6 +72,12 @@ cd /opt/smartestate-deploy
 sudo ./setup.sh --no-self-update
 ```
 
+Installer flags:
+
+- `-h`, `--help`: show usage and available options.
+- `-v`, `--verbose`: show detailed installer logs.
+- `--no-self-update`: skip auto-update from `origin/main`.
+
 Notes:
 
 - Existing `/opt/smartestate/.env` secrets (like `JWT_SECRET_KEY` and `DB_PASSWORD`) are preserved.

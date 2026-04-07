@@ -15,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_ROOT="/opt/smartestate"
 ENV_FILE="${DEPLOY_ROOT}/.env"
 SAMPLE_FILE="${SCRIPT_DIR}/env.sample"
+VERBOSE=0
 
 if [[ -t 1 ]]; then
   RESET=$'\033[0m'
@@ -43,7 +44,9 @@ section() {
 }
 
 note() {
-  printf '%s%s%s\n' "${DIM}" "$1" "${RESET}"
+  if [[ "${VERBOSE}" == "1" ]]; then
+    printf '%s%s%s\n' "${DIM}" "$1" "${RESET}"
+  fi
 }
 
 ok() {
@@ -287,6 +290,7 @@ print_usage() {
 Usage: ./setup.sh [options]
 
 Options:
+  -v, --verbose       Enable detailed installer logs
   --no-self-update    Skip auto-update from origin/main
   -h, --help          Show this help message
 EOF
@@ -295,6 +299,9 @@ EOF
 SKIP_SELF_UPDATE=0
 for arg in "$@"; do
   case "${arg}" in
+    -v|--verbose)
+      VERBOSE=1
+      ;;
     --no-self-update)
       SKIP_SELF_UPDATE=1
       ;;
