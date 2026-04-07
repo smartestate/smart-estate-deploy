@@ -31,6 +31,8 @@ The setup script is interactive and will ask for:
 - OpenAI API key (optional)
 - Sentry DSN (optional)
 
+If you want to automate private-repo access, you can export `GITHUB_USERNAME` and `GITHUB_PAT` before running the script. If those are not set, the script stays interactive and prompts on the first run.
+
 ## Release Strategy
 
 Use pre-production tags and releases in this repository:

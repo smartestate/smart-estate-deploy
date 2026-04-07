@@ -43,8 +43,14 @@ prompt_default() {
 echo "== Smart Estate VPS Setup =="
 echo "This will configure Docker, Nginx, Certbot, firewall, and app deployment."
 
-read -r -p "GitHub username for private repos (leave blank for public repos): " GITHUB_USERNAME
-if [[ -n "${GITHUB_USERNAME}" ]]; then
+GITHUB_USERNAME="${GITHUB_USERNAME:-}"
+GITHUB_PAT="${GITHUB_PAT:-}"
+
+if [[ -z "${GITHUB_USERNAME}" ]]; then
+  read -r -p "GitHub username for private repos (leave blank for public repos): " GITHUB_USERNAME
+fi
+
+if [[ -n "${GITHUB_USERNAME}" && -z "${GITHUB_PAT}" ]]; then
   read -r -s -p "GitHub PAT with repo read access: " GITHUB_PAT
   echo
 fi
@@ -276,4 +282,5 @@ fi
 
 echo "Done."
 
+unset GITHUB_USERNAME
 unset GITHUB_PAT
