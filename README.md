@@ -78,6 +78,7 @@ The setup script will:
 - generate secrets if they do not already exist
 - write a shared `/opt/smartestate/.env`
 - start the stack with Docker Compose
+- provision SSL automatically with Certbot when custom domains already resolve to the VPS
 
 The repo also includes `env.sample` with non-secret defaults that the setup script uses as first-run prompts.
 
@@ -152,14 +153,8 @@ Yes. Rerun the setup script. Existing secrets in `/opt/smartestate/.env` are pre
 
 - Ensure DNS points to the VPS before running Certbot.
 - Check that ports 80 and 443 are open on the VPS firewall and cloud provider firewall.
-- Verify both hostnames resolve first:
-
-```bash
-dig api.your-domain.com +short
-dig app.your-domain.com +short
-```
-
-If either command returns nothing, create the DNS record first and wait for propagation before retrying Certbot.
+- If you rerun `setup.sh` after DNS propagates, the script will try to provision SSL automatically.
+- The setup script waits up to 5 minutes for DNS to resolve before skipping SSL provisioning.
 
 ## Contact
 
