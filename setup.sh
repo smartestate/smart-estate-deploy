@@ -14,6 +14,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_ROOT="/opt/smartestate"
 ENV_FILE="${DEPLOY_ROOT}/.env"
+SAMPLE_FILE="${SCRIPT_DIR}/env.sample"
 
 get_env_value() {
   local key="$1"
@@ -21,6 +22,17 @@ get_env_value() {
 
   if [[ -f "${ENV_FILE}" ]]; then
     value="$(grep -E "^${key}=" "${ENV_FILE}" | tail -n 1 | cut -d= -f2- || true)"
+  fi
+
+  printf '%s' "${value}"
+}
+
+get_sample_value() {
+  local key="$1"
+  local value=""
+
+  if [[ -f "${SAMPLE_FILE}" ]]; then
+    value="$(grep -E "^${key}=" "${SAMPLE_FILE}" | tail -n 1 | cut -d= -f2- || true)"
   fi
 
   printf '%s' "${value}"
@@ -99,6 +111,13 @@ EXISTING_VITE_API_URL="$(get_env_value VITE_API_URL)"
 EXISTING_ENVIRONMENT="$(get_env_value ENVIRONMENT)"
 EXISTING_UPLOAD_DIR="$(get_env_value UPLOAD_DIR)"
 
+SAMPLE_DB_USER="$(get_sample_value DB_USER)"
+SAMPLE_DB_NAME="$(get_sample_value DB_NAME)"
+SAMPLE_CORS_ORIGINS="$(get_sample_value CORS_ORIGINS)"
+SAMPLE_ENVIRONMENT="$(get_sample_value ENVIRONMENT)"
+SAMPLE_UPLOAD_DIR="$(get_sample_value UPLOAD_DIR)"
+SAMPLE_VITE_API_URL="$(get_sample_value VITE_API_URL)"
+
 OPENAI_API_KEY="${EXISTING_OPENAI_API_KEY}"
 if [[ -z "${OPENAI_API_KEY}" ]]; then
   read -r -p "OpenAI API key (optional, leave blank to skip): " OPENAI_API_KEY
@@ -114,8 +133,8 @@ if [[ -z "${SENTRY_DSN}" ]]; then
   read -r -p "Sentry DSN (optional, leave blank to skip): " SENTRY_DSN
 fi
 
-DB_USER="$(prompt_default "DB user" "${EXISTING_DB_USER:-smartestate}")"
-DB_NAME="$(prompt_default "DB name" "${EXISTING_DB_NAME:-smartestate}")"
+DB_USER="$(prompt_default "DB user" "${EXISTING_DB_USER:-${SAMPLE_DB_USER:-smartestate}}")"
+DB_NAME="$(prompt_default "DB name" "${EXISTING_DB_NAME:-${SAMPLE_DB_NAME:-smartestate}}")"
 
 if [[ -n "${EXISTING_JWT_SECRET_KEY}" ]]; then
   JWT_SECRET_KEY="${EXISTING_JWT_SECRET_KEY}"
@@ -192,7 +211,7 @@ fi
 if [[ -n "${EXISTING_CORS_ORIGINS}" ]]; then
   CORS_ORIGINS="${EXISTING_CORS_ORIGINS}"
 else
-  CORS_ORIGINS="https://${APP_DOMAIN},https://${API_DOMAIN}"
+  CORS_ORIGINS="${SAMPLE_CORS_ORIGINS:-https://${APP_DOMAIN},https://${API_DOMAIN}}"
   if [[ ! "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
     CORS_ORIGINS="http://${APP_DOMAIN}:3000,http://${API_DOMAIN}:3000"
   fi
@@ -201,14 +220,14 @@ fi
 if [[ -n "${EXISTING_VITE_API_URL}" ]]; then
   VITE_API_URL="${EXISTING_VITE_API_URL}"
 else
-  VITE_API_URL="https://${API_DOMAIN}"
+  VITE_API_URL="${SAMPLE_VITE_API_URL:-https://${API_DOMAIN}}"
   if [[ ! "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
     VITE_API_URL="http://${API_DOMAIN}:8000"
   fi
 fi
 
-ENVIRONMENT="${EXISTING_ENVIRONMENT:-production}"
-UPLOAD_DIR="${EXISTING_UPLOAD_DIR:-/app/uploads}"
+ENVIRONMENT="${EXISTING_ENVIRONMENT:-${SAMPLE_ENVIRONMENT:-production}}"
+UPLOAD_DIR="${EXISTING_UPLOAD_DIR:-${SAMPLE_UPLOAD_DIR:-/app/uploads}}"
 
 cat > "${ENV_FILE}" <<EOF
 DB_USER=${DB_USER}

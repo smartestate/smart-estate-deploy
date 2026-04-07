@@ -75,6 +75,8 @@ The setup script will:
 - write a shared `/opt/smartestate/.env`
 - start the stack with Docker Compose
 
+The repo also includes `env.sample` with non-secret defaults that the setup script uses as first-run prompts.
+
 The script is interactive on first run. If you want to automate private repository access, you can export:
 
 ```bash
