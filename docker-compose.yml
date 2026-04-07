@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-smartestate}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./smart-estate-backend/project_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./smart-estate-backend/project_data.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ./smart-estate-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-smartestate}
+      DB_HOST: postgres
+    volumes:
+      - ./uploads:/app/uploads
+      - ./saved_models:/app/saved_models
+    depends_on:
+      - postgres
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - internal
+      - web
+
+  dashboard:
+    build:
+      context: ./smart-estate-dashboard
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"
+    depends_on:
+      - backend
+    networks:
+      - web
+
+volumes:
+  pg_data:
+
+networks:
+  internal:
+  web:
