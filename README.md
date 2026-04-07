@@ -25,6 +25,7 @@ sudo ./setup.sh
 ```
 
 The setup script is interactive and will ask for:
+- GitHub username and PAT if the repos are private
 - Git URLs for backend and dashboard
 - Domain configuration (or VPS-IP fallback)
 - OpenAI API key (optional)

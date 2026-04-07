@@ -43,6 +43,23 @@ prompt_default() {
 echo "== Smart Estate VPS Setup =="
 echo "This will configure Docker, Nginx, Certbot, firewall, and app deployment."
 
+read -r -p "GitHub username for private repos (leave blank for public repos): " GITHUB_USERNAME
+if [[ -n "${GITHUB_USERNAME}" ]]; then
+  read -r -s -p "GitHub PAT with repo read access: " GITHUB_PAT
+  echo
+fi
+
+auth_repo_url() {
+  local repo_url="$1"
+
+  if [[ -z "${GITHUB_USERNAME:-}" || -z "${GITHUB_PAT:-}" ]]; then
+    printf '%s' "${repo_url}"
+    return
+  fi
+
+  printf '%s' "${repo_url/https:\/\/github.com/https://${GITHUB_USERNAME}:${GITHUB_PAT}@github.com}"
+}
+
 read -r -p "Backend Git URL [https://github.com/smartestate/smart-estate-backend.git]: " BACKEND_REPO
 BACKEND_REPO=${BACKEND_REPO:-https://github.com/smartestate/smart-estate-backend.git}
 
@@ -131,13 +148,24 @@ mkdir -p "${DEPLOY_ROOT}" "${DEPLOY_ROOT}/uploads" "${DEPLOY_ROOT}/saved_models"
 clone_or_pull() {
   local repo_url="$1"
   local target_dir="$2"
+  local auth_url
+  auth_url="$(auth_repo_url "${repo_url}")"
 
   if [[ -d "${target_dir}/.git" ]]; then
+    local original_remote_url
+    original_remote_url="$(git -C "${target_dir}" remote get-url origin)"
+    if [[ "${auth_url}" != "${original_remote_url}" ]]; then
+      git -C "${target_dir}" remote set-url origin "${auth_url}"
+    fi
+    trap "git -C '${target_dir}' remote set-url origin '${original_remote_url}' >/dev/null 2>&1 || true" RETURN
     git -C "${target_dir}" fetch --all
     git -C "${target_dir}" checkout main || true
     git -C "${target_dir}" pull --ff-only origin main || true
   else
-    git clone "${repo_url}" "${target_dir}"
+    git clone "${auth_url}" "${target_dir}"
+    if [[ -n "${GITHUB_USERNAME:-}" && -n "${GITHUB_PAT:-}" ]]; then
+      git -C "${target_dir}" remote set-url origin "${repo_url}"
+    fi
   fi
 }
 
@@ -247,3 +275,5 @@ else
 fi
 
 echo "Done."
+
+unset GITHUB_PAT
