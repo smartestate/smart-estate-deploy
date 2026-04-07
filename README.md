@@ -117,6 +117,7 @@ Yes, if you are deploying on your own VPS with the included script.
 ### Can I use custom domains?
 
 Yes. The setup script supports domain-based deployment and can configure Nginx + Certbot.
+Before running setup with custom domains, create the DNS A records at your registrar and point `api` and `app` to the VPS IP.
 
 ### What if I do not have OpenAI or Sentry keys?
 

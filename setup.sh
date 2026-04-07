@@ -129,6 +129,8 @@ BACKEND_REPO=${BACKEND_REPO:-https://github.com/YOUR_ORG/smart-estate-backend.gi
 read -r -p "Dashboard Git URL [https://github.com/YOUR_ORG/smart-estate-dashboard.git]: " DASHBOARD_REPO
 DASHBOARD_REPO=${DASHBOARD_REPO:-https://github.com/YOUR_ORG/smart-estate-dashboard.git}
 
+echo "If you plan to use custom domains, create the DNS A records at your registrar first."
+echo "Point both api and app subdomains to this VPS IP before continuing with SSL setup."
 read -r -p "Use custom domains? (y/N): " USE_DOMAINS
 USE_DOMAINS=${USE_DOMAINS:-N}
 
