@@ -354,6 +354,7 @@ EXISTING_CORS_ORIGINS="$(get_env_value CORS_ORIGINS)"
 EXISTING_VITE_API_URL="$(get_env_value VITE_API_URL)"
 EXISTING_API_DOMAIN="$(get_env_value API_DOMAIN)"
 EXISTING_APP_DOMAIN="$(get_env_value APP_DOMAIN)"
+EXISTING_CERTBOT_EMAIL="$(get_env_value CERTBOT_EMAIL)"
 EXISTING_ENVIRONMENT="$(get_env_value ENVIRONMENT)"
 EXISTING_UPLOAD_DIR="$(get_env_value UPLOAD_DIR)"
 
@@ -367,12 +368,22 @@ SAMPLE_VITE_API_URL="$(get_sample_value VITE_API_URL)"
 section "Domains and SSL"
 warn "If you plan to use custom domains, create the DNS A records at your registrar first."
 note "Point both api and app subdomains to this VPS IP before continuing with SSL setup."
-USE_DOMAINS="$(prompt_yes_no "Use custom domains? (y/N)" "N")"
+VPS_IP="$(hostname -I | awk '{print $1}')"
+DEFAULT_USE_DOMAINS="N"
+if [[ -n "${EXISTING_API_DOMAIN}" && -n "${EXISTING_APP_DOMAIN}" && "${EXISTING_API_DOMAIN}" != "${VPS_IP}" && "${EXISTING_APP_DOMAIN}" != "${VPS_IP}" ]]; then
+  DEFAULT_USE_DOMAINS="Y"
+fi
+USE_DOMAINS="$(prompt_yes_no "Use custom domains? (y/N)" "${DEFAULT_USE_DOMAINS}")"
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  CERTBOT_EMAIL=""
-  note "Email is recommended for expiry notices (optional)."
-  CERTBOT_EMAIL="$(prompt_value "SSL certificate email (optional, leave blank to skip)" "")"
+  if [[ -n "${EXISTING_CERTBOT_EMAIL}" ]]; then
+    CERTBOT_EMAIL="${EXISTING_CERTBOT_EMAIL}"
+    ok "Keeping existing CERTBOT_EMAIL from ${ENV_FILE}."
+  else
+    CERTBOT_EMAIL=""
+    note "Email is recommended for expiry notices (optional)."
+    CERTBOT_EMAIL="$(prompt_value "SSL certificate email (optional, leave blank to skip)" "")"
+  fi
 
   if [[ -n "${EXISTING_API_DOMAIN}" && -n "${EXISTING_APP_DOMAIN}" ]]; then
     API_DOMAIN="${EXISTING_API_DOMAIN}"
@@ -396,9 +407,9 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
     APP_DOMAIN="$(prompt_value "App domain" "app.your-domain.com")"
   fi
 else
-  VPS_IP="$(hostname -I | awk '{print $1}')"
   API_DOMAIN="${VPS_IP}"
   APP_DOMAIN="${VPS_IP}"
+  CERTBOT_EMAIL=""
   note "Using IP-based mode without custom domains."
 fi
 
@@ -577,6 +588,7 @@ UPLOAD_DIR=${UPLOAD_DIR}
 VITE_API_URL=${VITE_API_URL}
 API_DOMAIN=${API_DOMAIN}
 APP_DOMAIN=${APP_DOMAIN}
+CERTBOT_EMAIL=${CERTBOT_EMAIL}
 EOF
 chmod 600 "${ENV_FILE}"
 
