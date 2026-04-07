@@ -357,9 +357,17 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
     APP_DOMAIN="${EXISTING_APP_DOMAIN}"
     ok "Keeping existing API_DOMAIN and APP_DOMAIN from ${ENV_FILE}."
   elif [[ -n "${EXISTING_VITE_API_URL}" && -n "${EXISTING_CORS_ORIGINS}" ]]; then
+    FIRST_CORS_ORIGIN="${EXISTING_CORS_ORIGINS%%,*}"
     API_DOMAIN="$(extract_host_from_url "${EXISTING_VITE_API_URL}")"
-    APP_DOMAIN="$(printf '%s' "${EXISTING_CORS_ORIGINS}" | cut -d, -f1 | sed -E 's#^https?://##; s#/.*$##; s/:.*$##')"
-    ok "Derived API_DOMAIN and APP_DOMAIN from existing deployment settings."
+    APP_DOMAIN="$(extract_host_from_url "${FIRST_CORS_ORIGIN}")"
+
+    if [[ -n "${API_DOMAIN}" && -n "${APP_DOMAIN}" ]]; then
+      ok "Derived API_DOMAIN and APP_DOMAIN from existing deployment settings."
+    else
+      warn "Could not safely derive domains from existing settings. Asking explicitly."
+      API_DOMAIN="$(prompt_value "API domain" "api.your-domain.com")"
+      APP_DOMAIN="$(prompt_value "App domain" "app.your-domain.com")"
+    fi
   else
     API_DOMAIN="$(prompt_value "API domain" "api.your-domain.com")"
 
