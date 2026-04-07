@@ -308,6 +308,39 @@ echo "Starting stack with Docker Compose..."
 cd "${DEPLOY_ROOT}"
 "${COMPOSE_CMD[@]}" --env-file .env up -d --build
 
+echo "Running post-deploy smoke checks..."
+if curl -fsS "http://127.0.0.1:8000/health" >/dev/null; then
+  echo "  [ok] Backend is healthy on localhost:8000"
+else
+  echo "  [warn] Backend health check failed on localhost:8000"
+  echo "         Check logs: ${COMPOSE_CMD[*]} -f ${DEPLOY_ROOT}/docker-compose.yml logs --tail=100 backend"
+fi
+
+if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
+  if curl -fsS "https://${API_DOMAIN}/health" >/dev/null; then
+    echo "  [ok] API HTTPS health check passed"
+  else
+    echo "  [warn] API HTTPS health check failed"
+    echo "         Ensure DNS is propagated and SSL is installed: certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
+  fi
+
+  CORS_HEADERS="$(curl -sS -D - -o /dev/null -X OPTIONS "https://${API_DOMAIN}/auth/login" -H "Origin: https://${APP_DOMAIN}" -H "Access-Control-Request-Method: POST" || true)"
+  if printf '%s' "${CORS_HEADERS}" | grep -iq "access-control-allow-origin: https://${APP_DOMAIN}"; then
+    echo "  [ok] CORS preflight looks correct for app domain"
+  else
+    echo "  [warn] CORS preflight did not return expected allow-origin"
+    echo "         Expected origin: https://${APP_DOMAIN}"
+    echo "         Current CORS_ORIGINS in ${ENV_FILE}: $(grep -E '^CORS_ORIGINS=' "${ENV_FILE}" | cut -d= -f2-)"
+  fi
+else
+  CORS_HEADERS="$(curl -sS -D - -o /dev/null -X OPTIONS "http://${API_DOMAIN}:8000/auth/login" -H "Origin: http://${APP_DOMAIN}:3000" -H "Access-Control-Request-Method: POST" || true)"
+  if printf '%s' "${CORS_HEADERS}" | grep -iq "access-control-allow-origin: http://${APP_DOMAIN}:3000"; then
+    echo "  [ok] CORS preflight looks correct for local IP mode"
+  else
+    echo "  [warn] CORS preflight did not return expected allow-origin for local IP mode"
+  fi
+fi
+
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
   echo "Run SSL provisioning after DNS propagation:"
   echo "  certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
