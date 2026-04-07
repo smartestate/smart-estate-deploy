@@ -134,11 +134,11 @@ self_update_from_origin_main() {
 headline() {
   cat <<'EOF'
 
-  ____                      _      _____     _        _
- / ___| _ __ ___   __ _ _ __| |_   | ____|___| |_ __ _| |_ ___
- \___ \| '_ ` _ \ / _` | '__| __|  |  _| / __| __/ _` | __/ _ \
-  ___) | | | | | | (_| | |  | |_   | |___\__ \ || (_| | ||  __/
- |____/|_| |_| |_|\__,_|_|   \__|  |_____|___/\__\__,_|\__\___|
+  _____ __  __    _    ____ _____    _____ ____ _____  _  _____ _____
+ / ____|  \/  |  / \  |  _ \_   _|  | ____/ ___|_   _|/ \|_   _| ____|
+| (___ | |\/| | / _ \ | |_) || |    |  _| \___ \ | | / _ \ | | |  _|
+ \___ \| |  | |/ ___ \|  _ < | |    | |___ ___) || |/ ___ \| | | |___
+ ____/ |_|  |_/_/   \_\_| \_\|_|    |_____|____/ |_/_/   \_\_| |_____|
 
                  Property maintenance, reimagined
 
@@ -308,11 +308,12 @@ for arg in "$@"; do
   esac
 done
 
+self_update_from_origin_main "$@"
+
 headline
 note "This setup will configure Docker, Nginx, Certbot, firewall, and app deployment."
 note "Press Enter to accept defaults shown in [brackets]."
 note "You can safely rerun this script later for updates."
-self_update_from_origin_main "$@"
 
 section "Repository Access"
 note "If backend/dashboard repos are private: enter GitHub username + PAT."
