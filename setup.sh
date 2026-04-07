@@ -52,6 +52,11 @@ prompt_default() {
   fi
 }
 
+domain_resolves() {
+  local domain="$1"
+  getent ahosts "${domain}" >/dev/null 2>&1
+}
+
 echo "== Smart Estate VPS Setup =="
 cat <<'EOF'
 
@@ -342,10 +347,20 @@ else
 fi
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  echo "Run SSL provisioning after DNS propagation:"
-  echo "  certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
-  echo "Then verify DNS:"
-  echo "  dig ${API_DOMAIN} +short"
+  if domain_resolves "${API_DOMAIN}" && domain_resolves "${APP_DOMAIN}"; then
+    echo "Run SSL provisioning:"
+    echo "  certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
+  else
+    echo "SSL is not ready yet because one or both domains do not resolve."
+    echo "Create DNS A or AAAA records for:"
+    echo "  ${API_DOMAIN}"
+    echo "  ${APP_DOMAIN}"
+    echo "After DNS propagates, run:"
+    echo "  certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
+    echo "You can check resolution with:"
+    echo "  dig ${API_DOMAIN} +short"
+    echo "  dig ${APP_DOMAIN} +short"
+  fi
 else
   echo "Custom domains not configured. Use these URLs:"
   echo "  API: http://${API_DOMAIN}:8000"
