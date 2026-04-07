@@ -53,7 +53,18 @@ prompt_default() {
 }
 
 echo "== Smart Estate VPS Setup =="
-echo "This will configure Docker, Nginx, Certbot, firewall, and app deployment."
+cat <<'EOF'
+
+  ____                      _      _____     _        _
+ / ___| _ __ ___   __ _ _ __| |_   | ____|___| |_ __ _| |_ ___
+ \___ \| '_ ` _ \ / _` | '__| __|  |  _| / __| __/ _` | __/ _ \
+  ___) | | | | | | (_| | |  | |_   | |___\__ \ || (_| | ||  __/
+ |____/|_| |_| |_|\__,_|_|   \__|  |_____|___/\__\__,_|\__\___|
+
+                 Property maintenance, reimagined
+
+EOF
+echo "This setup will configure Docker, Nginx, Certbot, firewall, and app deployment."
 
 read -r -p "GitHub username for private repos (leave blank for public repos): " GITHUB_USERNAME
 if [[ -n "${GITHUB_USERNAME}" ]]; then
