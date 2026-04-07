@@ -1,21 +1,63 @@
-# Smart Estate Deployment Repo
+# Smart Estate
 
-This repository is the production deployment orchestrator for Smart Estate on a Debian/Ubuntu Linux VPS.
+<div align="center">
+	<h1><b>Smart Estate</b></h1>
+	<p>
+		AI-powered maintenance management for modern residential buildings.
+		<br />
+		Tenants, technicians, and managers use one platform to create, track, and resolve maintenance work.
+	</p>
+	<p>
+		<a href="https://smartestate.me"><strong>Website</strong></a> |
+		<a href="https://app.smartestate.me"><strong>App</strong></a> |
+		<a href="https://api.smartestate.me/docs"><strong>API Docs</strong></a>
+	</p>
+</div>
 
-It provisions:
-- Docker + Docker Compose
-- UFW firewall baseline
-- Nginx reverse proxy
-- Certbot TLS setup (optional, after DNS)
-- App stack under /opt/smartestate
+## Overview
 
-It also wires these application repositories:
-- smart-estate-backend
-- smart-estate-dashboard
+Smart Estate is a maintenance operations platform for apartments, buildings, and property teams. It combines a FastAPI backend, a React dashboard, AI-assisted ticket classification, technician assignment, media uploads, audit logs, and realtime notifications.
 
-## Quick Start
+## Features
 
-Run on the VPS as root (or with sudo):
+- Resident maintenance requests with ticket tracking
+- AI-assisted issue classification and prioritization
+- Technician assignment and scheduling
+- Building, apartment, and user management
+- Realtime notifications over WebSocket
+- Photo and media uploads for issue reporting
+- Admin dashboard with operational reporting and audit logs
+- Docker-based deployment for Linux VPS environments
+
+## Requirements
+
+For self-hosting, you will need:
+
+- Debian or Ubuntu Linux VPS
+- Docker and Docker Compose
+- Nginx
+- Certbot for SSL
+- GitHub access to the backend and dashboard repositories
+- PostgreSQL 15+ (handled automatically by the provided compose stack)
+- Optional API keys:
+	- OpenAI
+	- Sentry
+	- OpenRouteService
+
+For end users, a modern browser is enough.
+
+## Getting Started
+
+### Option 1: Hosted app
+
+If you are using the hosted deployment, open the app at:
+
+- App: https://app.smartestate.me
+- API: https://api.smartestate.me
+
+### Option 2: Self-hosted setup
+
+This repository includes a VPS bootstrap script for self-hosting.
 
 ```bash
 git clone https://github.com/smartestate/smart-estate.git /opt/smartestate-deploy
@@ -24,36 +66,93 @@ chmod +x setup.sh
 sudo ./setup.sh
 ```
 
-The setup script is interactive and will ask for:
-- GitHub username and PAT if the repos are private
-- Git URLs for backend and dashboard
-- Domain configuration (or VPS-IP fallback)
-- OpenAI API key (optional)
-- Sentry DSN (optional)
+The setup script will:
 
-If you want to automate private-repo access, you can export `GITHUB_USERNAME` and `GITHUB_PAT` before running the script. If those are not set, the script stays interactive and prompts on the first run.
+- install Docker, Docker Compose, Nginx, Certbot, UFW, and Git
+- create `/opt/smartestate`
+- clone or update the backend and dashboard repositories
+- generate secrets if they do not already exist
+- write a shared `/opt/smartestate/.env`
+- start the stack with Docker Compose
 
-## Release Strategy
-
-Use pre-production tags and releases in this repository:
-- Tag format: v0.x.y-beta.z
-- Example: v0.1.0-beta.1
-
-Suggested flow:
+The script is interactive on first run. If you want to automate private repository access, you can export:
 
 ```bash
-git checkout main
-git pull origin main
-git tag v0.1.0-beta.1
-git push origin v0.1.0-beta.1
+export GITHUB_USERNAME="your-username"
+export GITHUB_PAT="your-pat"
 ```
 
-Then create a GitHub Release from that tag and mark it as pre-release.
+## Setup Details
 
-## Notes
+The deployment layout expects:
 
-- The script targets Debian-based systems (Ubuntu/Debian).
-- Final app runtime root is /opt/smartestate.
-- Shared env file is /opt/smartestate/.env.
-- Backend uploads are persisted at /opt/smartestate/uploads.
-- If /opt/smartestate/.env already exists, the setup script keeps existing JWT_SECRET_KEY and DB_PASSWORD values and only generates missing secrets.
+- `/opt/smartestate/.env` for shared configuration
+- `/opt/smartestate/uploads` for uploaded media
+- `/opt/smartestate/saved_models` for local AI models
+- `/opt/smartestate/smart-estate-backend` for the API
+- `/opt/smartestate/smart-estate-dashboard` for the web dashboard
+
+The setup script will keep existing `JWT_SECRET_KEY` and `DB_PASSWORD` values if the shared `.env` already exists.
+
+## FAQ
+
+### Is Smart Estate only for property managers?
+
+No. Tenants can submit requests, technicians can manage assignments, and managers can oversee operations from the dashboard.
+
+### Do I need Docker?
+
+Yes, if you are deploying on your own VPS with the included script.
+
+### Can I use custom domains?
+
+Yes. The setup script supports domain-based deployment and can configure Nginx + Certbot.
+
+### What if I do not have OpenAI or Sentry keys?
+
+Leave them blank. The platform will still deploy, but AI and observability features that depend on those services will be limited.
+
+### Can I update the deployment later?
+
+Yes. Rerun the setup script. Existing secrets in `/opt/smartestate/.env` are preserved.
+
+## Troubleshooting
+
+### The app does not start
+
+- Confirm Docker is installed and running.
+- Check `docker compose logs -f` inside `/opt/smartestate`.
+- Verify `/opt/smartestate/.env` exists and includes `DB_USER`, `DB_PASSWORD`, and `JWT_SECRET_KEY`.
+
+### Private GitHub repositories fail to clone
+
+- Export `GITHUB_USERNAME` and `GITHUB_PAT` before running `setup.sh`.
+- Make sure the PAT has read access to both private repositories.
+
+### Media uploads fail
+
+- Confirm `/opt/smartestate/uploads` exists.
+- Verify the backend container can write to the mounted uploads directory.
+
+### SSL certificate issuance fails
+
+- Ensure DNS points to the VPS before running Certbot.
+- Check that ports 80 and 443 are open on the VPS firewall and cloud provider firewall.
+
+## Contact
+
+- For hosted deployments, contact your Smart Estate administrator or support team.
+- For self-hosted deployments, open a GitHub issue in this repository.
+
+## Release Notes
+
+Pre-production releases use beta tags:
+
+- Tag format: `v0.x.y-beta.z`
+- Example: `v0.1.0-beta.1`
+
+Create a release from the tag and mark it as a pre-release in GitHub.
+
+## License
+
+Add your project license here before public distribution.
