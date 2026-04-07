@@ -75,6 +75,57 @@ summary_box() {
   printf '%s+%s+%s\n' "${LIGHT}" "${border}" "${RESET}"
 }
 
+self_update_from_origin_main() {
+  if [[ "${SETUP_SELF_UPDATED:-0}" == "1" ]]; then
+    return
+  fi
+
+  if ! git -C "${SCRIPT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return
+  fi
+
+  if ! git -C "${SCRIPT_DIR}" remote get-url origin >/dev/null 2>&1; then
+    return
+  fi
+
+  if ! git -C "${SCRIPT_DIR}" fetch --quiet origin main; then
+    warn "Could not check for setup updates from origin/main. Continuing with current script."
+    return
+  fi
+
+  local current_head
+  local remote_head
+  current_head="$(git -C "${SCRIPT_DIR}" rev-parse HEAD 2>/dev/null || true)"
+  remote_head="$(git -C "${SCRIPT_DIR}" rev-parse origin/main 2>/dev/null || true)"
+
+  if [[ -z "${current_head}" || -z "${remote_head}" || "${current_head}" == "${remote_head}" ]]; then
+    return
+  fi
+
+  local has_local_changes=0
+  if ! git -C "${SCRIPT_DIR}" diff --quiet || ! git -C "${SCRIPT_DIR}" diff --cached --quiet || [[ -n "$(git -C "${SCRIPT_DIR}" ls-files --others --exclude-standard)" ]]; then
+    has_local_changes=1
+    local stash_name="smartestate-setup-autostash-$(date +%s)"
+    if git -C "${SCRIPT_DIR}" stash push -u -m "${stash_name}" >/dev/null; then
+      warn "Local deploy-repo changes were auto-stashed: ${stash_name}"
+    else
+      warn "Local changes were detected but could not be auto-stashed. Continuing with current script."
+      return
+    fi
+  fi
+
+  if git -C "${SCRIPT_DIR}" pull --ff-only --quiet origin main; then
+    ok "Installer updated from origin/main. Launching latest setup script..."
+    export SETUP_SELF_UPDATED=1
+    exec bash "${SCRIPT_DIR}/setup.sh" "$@"
+  fi
+
+  warn "Could not fast-forward deploy repo from origin/main. Continuing with current script."
+  if [[ "${has_local_changes}" == "1" ]]; then
+    note "Auto-stashed changes are preserved in git stash."
+  fi
+}
+
 headline() {
   cat <<'EOF'
 
@@ -177,6 +228,7 @@ wait_for_dns_match() {
 
 headline
 note "This setup will configure Docker, Nginx, Certbot, firewall, and app deployment."
+self_update_from_origin_main "$@"
 
 section "Repository Access"
 GITHUB_USERNAME="$(prompt_value "GitHub username for private repos (leave blank for public repos)" "")"
