@@ -46,6 +46,11 @@ extract_host_from_url() {
   printf '%s' "${url}"
 }
 
+resolve_ipv4() {
+  local hostname="$1"
+  getent ahostsv4 "${hostname}" 2>/dev/null | awk 'NR==1 { print $1 }'
+}
+
 prompt_default() {
   local prompt_text="$1"
   local default_value="$2"
@@ -101,6 +106,9 @@ read -r -p "Use custom domains? (y/N): " USE_DOMAINS
 USE_DOMAINS=${USE_DOMAINS:-N}
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
+  CERTBOT_EMAIL=""
+  read -r -p "SSL certificate email (optional, leave blank to skip): " CERTBOT_EMAIL
+
   if [[ -n "${EXISTING_API_DOMAIN}" && -n "${EXISTING_APP_DOMAIN}" ]]; then
     API_DOMAIN="${EXISTING_API_DOMAIN}"
     APP_DOMAIN="${EXISTING_APP_DOMAIN}"
@@ -350,11 +358,32 @@ else
 fi
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  if curl -fsS "https://${API_DOMAIN}/health" >/dev/null; then
-    echo "  [ok] API HTTPS health check passed"
+  CURRENT_IP="$(hostname -I | awk '{print $1}')"
+  API_DNS_IP="$(resolve_ipv4 "${API_DOMAIN}")"
+  APP_DNS_IP="$(resolve_ipv4 "${APP_DOMAIN}")"
+
+  if [[ -n "${API_DNS_IP}" && -n "${APP_DNS_IP}" && "${API_DNS_IP}" == "${CURRENT_IP}" && "${APP_DNS_IP}" == "${CURRENT_IP}" ]]; then
+    CERTBOT_CMD=(certbot --nginx -d "${API_DOMAIN}" -d "${APP_DOMAIN}" --non-interactive --agree-tos)
+    if [[ -n "${CERTBOT_EMAIL}" ]]; then
+      CERTBOT_CMD+=(--email "${CERTBOT_EMAIL}")
+    else
+      CERTBOT_CMD+=(--register-unsafely-without-email)
+    fi
+
+    echo "Running SSL provisioning now that DNS points to this VPS..."
+    "${CERTBOT_CMD[@]}"
+
+    if curl -fsS "https://${API_DOMAIN}/health" >/dev/null; then
+      echo "  [ok] API HTTPS health check passed"
+    else
+      echo "  [warn] API HTTPS health check failed after certificate provisioning"
+    fi
   else
-    echo "  [warn] API HTTPS health check failed"
-    echo "         Ensure DNS is propagated and SSL is installed: certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
+    echo "  [warn] DNS is not yet pointing at this VPS for both domains"
+    echo "         API resolves to: ${API_DNS_IP:-<unresolved>}"
+    echo "         App resolves to: ${APP_DNS_IP:-<unresolved>}"
+    echo "         Current VPS IP: ${CURRENT_IP}"
+    echo "         SSL provisioning was skipped for now. Re-run setup after DNS propagates."
   fi
 
   CORS_HEADERS="$(curl -sS -D - -o /dev/null -X OPTIONS "https://${API_DOMAIN}/auth/login" -H "Origin: https://${APP_DOMAIN}" -H "Access-Control-Request-Method: POST" || true)"
@@ -372,14 +401,7 @@ else
   else
     echo "  [warn] CORS preflight did not return expected allow-origin for local IP mode"
   fi
-fi
 
-if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  echo "Run SSL provisioning after DNS propagation:"
-  echo "  certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
-  echo "Then verify DNS:"
-  echo "  dig ${API_DOMAIN} +short"
-else
   echo "Custom domains not configured. Use these URLs:"
   echo "  API: http://${API_DOMAIN}:8000"
   echo "  Dashboard: http://${APP_DOMAIN}:3000"
