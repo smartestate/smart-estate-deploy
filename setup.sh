@@ -16,6 +16,80 @@ DEPLOY_ROOT="/opt/smartestate"
 ENV_FILE="${DEPLOY_ROOT}/.env"
 SAMPLE_FILE="${SCRIPT_DIR}/env.sample"
 
+if [[ -t 1 ]]; then
+  RESET=$'\033[0m'
+  BOLD=$'\033[1m'
+  DIM=$'\033[2m'
+  ORANGE=$'\033[38;5;208m'
+  CYAN=$'\033[38;5;81m'
+  GREEN=$'\033[38;5;70m'
+  YELLOW=$'\033[38;5;214m'
+  RED=$'\033[38;5;203m'
+else
+  RESET=''
+  BOLD=''
+  DIM=''
+  ORANGE=''
+  CYAN=''
+  GREEN=''
+  YELLOW=''
+  RED=''
+fi
+
+section() {
+  printf '\n%s%s=== %s ===%s\n' "${BOLD}" "${ORANGE}" "$1" "${RESET}"
+}
+
+note() {
+  printf '%s%s%s\n' "${DIM}" "$1" "${RESET}"
+}
+
+ok() {
+  printf '%s[ok]%s %s\n' "${GREEN}" "${RESET}" "$1"
+}
+
+warn() {
+  printf '%s[warn]%s %s\n' "${YELLOW}" "${RESET}" "$1"
+}
+
+headline() {
+  cat <<'EOF'
+
+  ____                      _      _____     _        _
+ / ___| _ __ ___   __ _ _ __| |_   | ____|___| |_ __ _| |_ ___
+ \___ \| '_ ` _ \ / _` | '__| __|  |  _| / __| __/ _` | __/ _ \
+  ___) | | | | | | (_| | |  | |_   | |___\__ \ || (_| | ||  __/
+ |____/|_| |_| |_|\__,_|_|   \__|  |_____|___/\__\__,_|\__\___|
+
+                 Property maintenance, reimagined
+
+EOF
+}
+
+prompt_value() {
+  local label="$1"
+  local default_value="$2"
+  local response=""
+
+  if [[ -n "${default_value}" ]]; then
+    printf '%s%s%s [%s]: ' "${BOLD}" "${CYAN}" "${label}" "${default_value}"
+  else
+    printf '%s%s%s: ' "${BOLD}" "${CYAN}" "${label}"
+  fi
+
+  read -r response
+  printf '%s' "${response:-${default_value}}"
+}
+
+prompt_secret_value() {
+  local label="$1"
+  local response=""
+
+  printf '%s%s%s: ' "${BOLD}" "${CYAN}" "${label}"
+  read -r -s response
+  printf '\n%s' "${response}"
+}
+
 get_env_value() {
   local key="$1"
   local value=""
@@ -92,24 +166,13 @@ prompt_default() {
   fi
 }
 
-echo "== Smart Estate VPS Setup =="
-cat <<'EOF'
+headline
+note "This setup will configure Docker, Nginx, Certbot, firewall, and app deployment."
 
-  ____                      _      _____     _        _
- / ___| _ __ ___   __ _ _ __| |_   | ____|___| |_ __ _| |_ ___
- \___ \| '_ ` _ \ / _` | '__| __|  |  _| / __| __/ _` | __/ _ \
-  ___) | | | | | | (_| | |  | |_   | |___\__ \ || (_| | ||  __/
- |____/|_| |_| |_|\__,_|_|   \__|  |_____|___/\__\__,_|\__\___|
-
-                 Property maintenance, reimagined
-
-EOF
-echo "This setup will configure Docker, Nginx, Certbot, firewall, and app deployment."
-
-read -r -p "GitHub username for private repos (leave blank for public repos): " GITHUB_USERNAME
+section "Repository Access"
+GITHUB_USERNAME="$(prompt_value "GitHub username for private repos (leave blank for public repos)" "")"
 if [[ -n "${GITHUB_USERNAME}" ]]; then
-  read -r -s -p "GitHub PAT with repo read access: " GITHUB_PAT
-  echo
+  GITHUB_PAT="$(prompt_secret_value "GitHub PAT with repo read access")"
 fi
 
 auth_repo_url() {
@@ -123,41 +186,10 @@ auth_repo_url() {
   printf '%s' "${repo_url/https:\/\/github.com/https://${GITHUB_USERNAME}:${GITHUB_PAT}@github.com}"
 }
 
-read -r -p "Backend Git URL [https://github.com/YOUR_ORG/smart-estate-backend.git]: " BACKEND_REPO
-BACKEND_REPO=${BACKEND_REPO:-https://github.com/YOUR_ORG/smart-estate-backend.git}
+section "Application Sources"
+BACKEND_REPO="$(prompt_value "Backend Git URL" "https://github.com/YOUR_ORG/smart-estate-backend.git")"
 
-read -r -p "Dashboard Git URL [https://github.com/YOUR_ORG/smart-estate-dashboard.git]: " DASHBOARD_REPO
-DASHBOARD_REPO=${DASHBOARD_REPO:-https://github.com/YOUR_ORG/smart-estate-dashboard.git}
-
-echo "If you plan to use custom domains, create the DNS A records at your registrar first."
-echo "Point both api and app subdomains to this VPS IP before continuing with SSL setup."
-read -r -p "Use custom domains? (y/N): " USE_DOMAINS
-USE_DOMAINS=${USE_DOMAINS:-N}
-
-if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  CERTBOT_EMAIL=""
-  read -r -p "SSL certificate email (optional, leave blank to skip): " CERTBOT_EMAIL
-
-  if [[ -n "${EXISTING_API_DOMAIN}" && -n "${EXISTING_APP_DOMAIN}" ]]; then
-    API_DOMAIN="${EXISTING_API_DOMAIN}"
-    APP_DOMAIN="${EXISTING_APP_DOMAIN}"
-    echo "Keeping existing API_DOMAIN and APP_DOMAIN from ${ENV_FILE}."
-  elif [[ -n "${EXISTING_VITE_API_URL}" && -n "${EXISTING_CORS_ORIGINS}" ]]; then
-    API_DOMAIN="$(extract_host_from_url "${EXISTING_VITE_API_URL}")"
-    APP_DOMAIN="$(printf '%s' "${EXISTING_CORS_ORIGINS}" | cut -d, -f1 | sed -E 's#^https?://##; s#/.*$##; s/:.*$##')"
-    echo "Derived API_DOMAIN and APP_DOMAIN from existing deployment settings."
-  else
-    read -r -p "API domain [api.your-domain.com]: " API_DOMAIN
-    API_DOMAIN=${API_DOMAIN:-api.your-domain.com}
-
-    read -r -p "App domain [app.your-domain.com]: " APP_DOMAIN
-    APP_DOMAIN=${APP_DOMAIN:-app.your-domain.com}
-  fi
-else
-  VPS_IP="$(hostname -I | awk '{print $1}')"
-  API_DOMAIN="${VPS_IP}"
-  APP_DOMAIN="${VPS_IP}"
-fi
+DASHBOARD_REPO="$(prompt_value "Dashboard Git URL" "https://github.com/YOUR_ORG/smart-estate-dashboard.git")"
 
 EXISTING_DB_USER="$(get_env_value DB_USER)"
 EXISTING_DB_PASSWORD="$(get_env_value DB_PASSWORD)"
@@ -180,55 +212,86 @@ SAMPLE_ENVIRONMENT="$(get_sample_value ENVIRONMENT)"
 SAMPLE_UPLOAD_DIR="$(get_sample_value UPLOAD_DIR)"
 SAMPLE_VITE_API_URL="$(get_sample_value VITE_API_URL)"
 
+section "Domains and SSL"
+warn "If you plan to use custom domains, create the DNS A records at your registrar first."
+note "Point both api and app subdomains to this VPS IP before continuing with SSL setup."
+USE_DOMAINS="$(prompt_value "Use custom domains? (y/N)" "N")"
+
+if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
+  CERTBOT_EMAIL=""
+  CERTBOT_EMAIL="$(prompt_value "SSL certificate email (optional, leave blank to skip)" "")"
+
+  if [[ -n "${EXISTING_API_DOMAIN}" && -n "${EXISTING_APP_DOMAIN}" ]]; then
+    API_DOMAIN="${EXISTING_API_DOMAIN}"
+    APP_DOMAIN="${EXISTING_APP_DOMAIN}"
+    echo "Keeping existing API_DOMAIN and APP_DOMAIN from ${ENV_FILE}."
+  elif [[ -n "${EXISTING_VITE_API_URL}" && -n "${EXISTING_CORS_ORIGINS}" ]]; then
+    API_DOMAIN="$(extract_host_from_url "${EXISTING_VITE_API_URL}")"
+    APP_DOMAIN="$(printf '%s' "${EXISTING_CORS_ORIGINS}" | cut -d, -f1 | sed -E 's#^https?://##; s#/.*$##; s/:.*$##')"
+    echo "Derived API_DOMAIN and APP_DOMAIN from existing deployment settings."
+  else
+    API_DOMAIN="$(prompt_value "API domain" "api.your-domain.com")"
+
+    APP_DOMAIN="$(prompt_value "App domain" "app.your-domain.com")"
+  fi
+else
+  VPS_IP="$(hostname -I | awk '{print $1}')"
+  API_DOMAIN="${VPS_IP}"
+  APP_DOMAIN="${VPS_IP}"
+fi
+
+section "Secrets and Runtime Settings"
+
 OPENAI_API_KEY="${EXISTING_OPENAI_API_KEY}"
 if [[ -z "${OPENAI_API_KEY}" ]]; then
-  read -r -p "OpenAI API key (optional, leave blank to skip): " OPENAI_API_KEY
+  OPENAI_API_KEY="$(prompt_value "OpenAI API key (optional, leave blank to skip)" "")"
 fi
 
 ORS_API_KEY="${EXISTING_ORS_API_KEY}"
 if [[ -z "${ORS_API_KEY}" ]]; then
-  read -r -p "OpenRouteService API key (optional, leave blank to skip): " ORS_API_KEY
+  ORS_API_KEY="$(prompt_value "OpenRouteService API key (optional, leave blank to skip)" "")"
 fi
 
 SENTRY_DSN="${EXISTING_SENTRY_DSN}"
 if [[ -z "${SENTRY_DSN}" ]]; then
-  read -r -p "Sentry DSN (optional, leave blank to skip): " SENTRY_DSN
+  SENTRY_DSN="$(prompt_value "Sentry DSN (optional, leave blank to skip)" "")"
 fi
 
 if [[ -n "${EXISTING_DB_USER}" ]]; then
   DB_USER="${EXISTING_DB_USER}"
-  echo "Keeping existing DB_USER from ${ENV_FILE}."
+  ok "Keeping existing DB_USER from ${ENV_FILE}."
 else
-  DB_USER="$(prompt_default "DB user" "${SAMPLE_DB_USER:-smartestate}")"
+  DB_USER="$(prompt_value "DB user" "${SAMPLE_DB_USER:-smartestate}")"
 fi
 
 if [[ -n "${EXISTING_DB_NAME}" ]]; then
   DB_NAME="${EXISTING_DB_NAME}"
-  echo "Keeping existing DB_NAME from ${ENV_FILE}."
+  ok "Keeping existing DB_NAME from ${ENV_FILE}."
 else
-  DB_NAME="$(prompt_default "DB name" "${SAMPLE_DB_NAME:-smartestate}")"
+  DB_NAME="$(prompt_value "DB name" "${SAMPLE_DB_NAME:-smartestate}")"
 fi
 
 if [[ -n "${EXISTING_JWT_SECRET_KEY}" ]]; then
   JWT_SECRET_KEY="${EXISTING_JWT_SECRET_KEY}"
-  echo "Keeping existing JWT_SECRET_KEY from ${ENV_FILE}."
+  ok "Keeping existing JWT_SECRET_KEY from ${ENV_FILE}."
 else
   JWT_SECRET_KEY="$(openssl rand -hex 32)"
-  echo "Generated JWT_SECRET_KEY."
+  ok "Generated JWT_SECRET_KEY."
 fi
 
 if [[ -n "${EXISTING_DB_PASSWORD}" ]]; then
   DB_PASSWORD="${EXISTING_DB_PASSWORD}"
-  echo "Keeping existing DB_PASSWORD from ${ENV_FILE}."
+  ok "Keeping existing DB_PASSWORD from ${ENV_FILE}."
 else
   DB_PASSWORD="$(openssl rand -hex 16)"
-  echo "Generated DB_PASSWORD."
+  ok "Generated DB_PASSWORD."
 fi
 
-echo "Updating packages..."
+section "System Setup"
+note "Updating packages..."
 apt update && apt upgrade -y
 
-echo "Installing dependencies..."
+note "Installing dependencies..."
 apt install -y docker.io nginx certbot python3-certbot-nginx ufw git openssl curl
 
 # Compose package names vary by distro/repo. Try common options.
@@ -236,13 +299,13 @@ if ! apt install -y docker-compose-plugin; then
   apt install -y docker-compose-v2 || apt install -y docker-compose || true
 fi
 
-echo "Configuring firewall..."
+note "Configuring firewall..."
 ufw allow 22
 ufw allow 80
 ufw allow 443
 ufw --force enable
 
-echo "Enabling Docker..."
+note "Enabling Docker..."
 systemctl enable docker
 systemctl start docker
 
@@ -282,7 +345,8 @@ clone_or_pull() {
   fi
 }
 
-echo "Cloning application repositories..."
+section "Application Deployment"
+note "Cloning or updating application repositories..."
 clone_or_pull "${BACKEND_REPO}" "${DEPLOY_ROOT}/smart-estate-backend"
 clone_or_pull "${DASHBOARD_REPO}" "${DEPLOY_ROOT}/smart-estate-dashboard"
 
@@ -378,12 +442,13 @@ echo "Starting stack with Docker Compose..."
 cd "${DEPLOY_ROOT}"
 "${COMPOSE_CMD[@]}" --env-file .env up -d --build
 
-echo "Running post-deploy smoke checks..."
+section "Validation"
+note "Running post-deploy smoke checks..."
 if curl -fsS "http://127.0.0.1:8000/health" >/dev/null; then
-  echo "  [ok] Backend is healthy on localhost:8000"
+  ok "Backend is healthy on localhost:8000"
 else
-  echo "  [warn] Backend health check failed on localhost:8000"
-  echo "         Check logs: ${COMPOSE_CMD[*]} -f ${DEPLOY_ROOT}/docker-compose.yml logs --tail=100 backend"
+  warn "Backend health check failed on localhost:8000"
+  note "Check logs: ${COMPOSE_CMD[*]} -f ${DEPLOY_ROOT}/docker-compose.yml logs --tail=100 backend"
 fi
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
@@ -399,20 +464,20 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
       CERTBOT_CMD+=(--register-unsafely-without-email)
     fi
 
-    echo "Running SSL provisioning now that DNS points to this VPS..."
+    note "Running SSL provisioning now that DNS points to this VPS..."
     "${CERTBOT_CMD[@]}"
 
     if curl -fsS "https://${API_DOMAIN}/health" >/dev/null; then
-      echo "  [ok] API HTTPS health check passed"
+      ok "API HTTPS health check passed"
     else
-      echo "  [warn] API HTTPS health check failed after certificate provisioning"
+      warn "API HTTPS health check failed after certificate provisioning"
     fi
   else
-    echo "  [warn] DNS is not yet pointing at this VPS for both domains"
-    echo "         API resolves to: ${API_DNS_IP:-<unresolved>}"
-    echo "         App resolves to: ${APP_DNS_IP:-<unresolved>}"
-    echo "         Current VPS IP: ${CURRENT_IP}"
-    echo "         Waiting up to 5 minutes for DNS propagation before skipping SSL..."
+    warn "DNS is not yet pointing at this VPS for both domains"
+    note "API resolves to: ${API_DNS_IP:-<unresolved>}"
+    note "App resolves to: ${APP_DNS_IP:-<unresolved>}"
+    note "Current VPS IP: ${CURRENT_IP}"
+    note "Waiting up to 5 minutes for DNS propagation before skipping SSL..."
 
     API_DNS_IP="$(wait_for_dns_match "${API_DOMAIN}" "${CURRENT_IP}" 300 15 || true)"
     APP_DNS_IP="$(wait_for_dns_match "${APP_DOMAIN}" "${CURRENT_IP}" 300 15 || true)"
@@ -425,42 +490,43 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
         CERTBOT_CMD+=(--register-unsafely-without-email)
       fi
 
-      echo "Running SSL provisioning after DNS propagation wait..."
+      note "Running SSL provisioning after DNS propagation wait..."
       "${CERTBOT_CMD[@]}"
 
       if curl -fsS "https://${API_DOMAIN}/health" >/dev/null; then
-        echo "  [ok] API HTTPS health check passed"
+        ok "API HTTPS health check passed"
       else
-        echo "  [warn] API HTTPS health check failed after certificate provisioning"
+        warn "API HTTPS health check failed after certificate provisioning"
       fi
     else
-      echo "  [warn] DNS still does not resolve to this VPS after waiting"
-      echo "         SSL provisioning was skipped for now. Re-run setup after DNS propagates."
+      warn "DNS still does not resolve to this VPS after waiting"
+      note "SSL provisioning was skipped for now. Re-run setup after DNS propagates."
     fi
   fi
 
   CORS_HEADERS="$(curl -sS -D - -o /dev/null -X OPTIONS "https://${API_DOMAIN}/auth/login" -H "Origin: https://${APP_DOMAIN}" -H "Access-Control-Request-Method: POST" || true)"
   if printf '%s' "${CORS_HEADERS}" | grep -iq "access-control-allow-origin: https://${APP_DOMAIN}"; then
-    echo "  [ok] CORS preflight looks correct for app domain"
+    ok "CORS preflight looks correct for app domain"
   else
-    echo "  [warn] CORS preflight did not return expected allow-origin"
-    echo "         Expected origin: https://${APP_DOMAIN}"
-    echo "         Current CORS_ORIGINS in ${ENV_FILE}: $(grep -E '^CORS_ORIGINS=' "${ENV_FILE}" | cut -d= -f2-)"
+    warn "CORS preflight did not return expected allow-origin"
+    note "Expected origin: https://${APP_DOMAIN}"
+    note "Current CORS_ORIGINS in ${ENV_FILE}: $(grep -E '^CORS_ORIGINS=' "${ENV_FILE}" | cut -d= -f2-)"
   fi
 else
   CORS_HEADERS="$(curl -sS -D - -o /dev/null -X OPTIONS "http://${API_DOMAIN}:8000/auth/login" -H "Origin: http://${APP_DOMAIN}:3000" -H "Access-Control-Request-Method: POST" || true)"
   if printf '%s' "${CORS_HEADERS}" | grep -iq "access-control-allow-origin: http://${APP_DOMAIN}:3000"; then
-    echo "  [ok] CORS preflight looks correct for local IP mode"
+    ok "CORS preflight looks correct for local IP mode"
   else
-    echo "  [warn] CORS preflight did not return expected allow-origin for local IP mode"
+    warn "CORS preflight did not return expected allow-origin for local IP mode"
   fi
 
-  echo "Custom domains not configured. Use these URLs:"
-  echo "  API: http://${API_DOMAIN}:8000"
-  echo "  Dashboard: http://${APP_DOMAIN}:3000"
+  note "Custom domains not configured. Use these URLs:"
+  note "API: http://${API_DOMAIN}:8000"
+  note "Dashboard: http://${APP_DOMAIN}:3000"
 fi
 
-echo "Done."
+section "Done"
+ok "Setup complete"
 
 unset GITHUB_USERNAME
 unset GITHUB_PAT
