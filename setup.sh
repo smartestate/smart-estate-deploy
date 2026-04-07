@@ -305,6 +305,26 @@ get_sample_value() {
   printf '%s' "${value}"
 }
 
+is_valid_email() {
+  local value="$1"
+  [[ "${value}" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]
+}
+
+is_valid_repo_url() {
+  local value="$1"
+  [[ "${value}" =~ ^https://[^[:space:]]+\.git$ || "${value}" =~ ^git@[^:]+:[^[:space:]]+\.git$ ]]
+}
+
+is_valid_openai_key() {
+  local value="$1"
+  [[ "${value}" == sk-proj-* ]]
+}
+
+is_valid_sentry_dsn() {
+  local value="$1"
+  [[ "${value}" == *sentry.io* ]]
+}
+
 extract_host_from_url() {
   local url="$1"
   url="${url#*://}"
@@ -433,9 +453,29 @@ auth_repo_url() {
 section "Application Sources"
 note "Provide repository clone URLs for backend and dashboard."
 note "Tip: use your org URLs (defaults are placeholders)."
-BACKEND_REPO="$(prompt_value "Backend Git URL" "https://github.com/YOUR_ORG/smart-estate-backend.git")"
+while true; do
+  BACKEND_REPO="$(prompt_value "Backend Git URL" "https://github.com/YOUR_ORG/smart-estate-backend.git")"
+  if [[ "${BACKEND_REPO}" == *"YOUR_ORG"* ]]; then
+    warn "Please replace YOUR_ORG with your real GitHub org/user in Backend Git URL."
+    continue
+  fi
+  if is_valid_repo_url "${BACKEND_REPO}"; then
+    break
+  fi
+  warn "Backend Git URL must be an https/ssh git URL ending with .git"
+done
 
-DASHBOARD_REPO="$(prompt_value "Dashboard Git URL" "https://github.com/YOUR_ORG/smart-estate-dashboard.git")"
+while true; do
+  DASHBOARD_REPO="$(prompt_value "Dashboard Git URL" "https://github.com/YOUR_ORG/smart-estate-dashboard.git")"
+  if [[ "${DASHBOARD_REPO}" == *"YOUR_ORG"* ]]; then
+    warn "Please replace YOUR_ORG with your real GitHub org/user in Dashboard Git URL."
+    continue
+  fi
+  if is_valid_repo_url "${DASHBOARD_REPO}"; then
+    break
+  fi
+  warn "Dashboard Git URL must be an https/ssh git URL ending with .git"
+done
 
 EXISTING_DB_USER="$(get_env_value DB_USER)"
 EXISTING_DB_PASSWORD="$(get_env_value DB_PASSWORD)"
@@ -470,13 +510,22 @@ fi
 USE_DOMAINS="$(prompt_yes_no "Use custom domains? (y/N)" "${DEFAULT_USE_DOMAINS}")"
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  if [[ -n "${EXISTING_CERTBOT_EMAIL}" ]]; then
+  if [[ -n "${EXISTING_CERTBOT_EMAIL}" ]] && is_valid_email "${EXISTING_CERTBOT_EMAIL}"; then
     CERTBOT_EMAIL="${EXISTING_CERTBOT_EMAIL}"
     ok "Keeping existing CERTBOT_EMAIL from ${ENV_FILE}."
   else
     CERTBOT_EMAIL=""
+    if [[ -n "${EXISTING_CERTBOT_EMAIL}" ]]; then
+      warn "Existing CERTBOT_EMAIL is invalid and must be updated."
+    fi
     note "Email is recommended for expiry notices (optional)."
-    CERTBOT_EMAIL="$(prompt_value "SSL certificate email (optional, leave blank to skip)" "")"
+    while true; do
+      CERTBOT_EMAIL="$(prompt_value "SSL certificate email (optional, leave blank to skip)" "")"
+      if [[ -z "${CERTBOT_EMAIL}" ]] || is_valid_email "${CERTBOT_EMAIL}"; then
+        break
+      fi
+      warn "Please enter a valid email address or leave blank."
+    done
   fi
 
   if [[ -n "${EXISTING_API_DOMAIN}" && -n "${EXISTING_APP_DOMAIN}" ]]; then
@@ -510,8 +559,18 @@ fi
 section "Secrets and Runtime Settings"
 
 OPENAI_API_KEY="${EXISTING_OPENAI_API_KEY}"
+if [[ -n "${OPENAI_API_KEY}" ]] && ! is_valid_openai_key "${OPENAI_API_KEY}"; then
+  warn "Existing OPENAI_API_KEY is invalid. Expected prefix: sk-proj-"
+  OPENAI_API_KEY=""
+fi
 if [[ -z "${OPENAI_API_KEY}" ]]; then
-  OPENAI_API_KEY="$(prompt_value "OpenAI API key (optional, leave blank to skip)" "")"
+  while true; do
+    OPENAI_API_KEY="$(prompt_value "OpenAI API key (optional, leave blank to skip)" "")"
+    if [[ -z "${OPENAI_API_KEY}" ]] || is_valid_openai_key "${OPENAI_API_KEY}"; then
+      break
+    fi
+    warn "OpenAI API key must start with sk-proj- or be left blank."
+  done
 fi
 
 ORS_API_KEY="${EXISTING_ORS_API_KEY}"
@@ -520,8 +579,18 @@ if [[ -z "${ORS_API_KEY}" ]]; then
 fi
 
 SENTRY_DSN="${EXISTING_SENTRY_DSN}"
+if [[ -n "${SENTRY_DSN}" ]] && ! is_valid_sentry_dsn "${SENTRY_DSN}"; then
+  warn "Existing SENTRY_DSN is invalid. Expected to include sentry.io"
+  SENTRY_DSN=""
+fi
 if [[ -z "${SENTRY_DSN}" ]]; then
-  SENTRY_DSN="$(prompt_value "Sentry DSN (optional, leave blank to skip)" "")"
+  while true; do
+    SENTRY_DSN="$(prompt_value "Sentry DSN (optional, leave blank to skip)" "")"
+    if [[ -z "${SENTRY_DSN}" ]] || is_valid_sentry_dsn "${SENTRY_DSN}"; then
+      break
+    fi
+    warn "Sentry DSN must include sentry.io or be left blank."
+  done
 fi
 
 if [[ -n "${EXISTING_DB_USER}" ]]; then
