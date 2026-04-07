@@ -7,11 +7,6 @@
 		<br />
 		Tenants, technicians, and managers use one platform to create, track, and resolve maintenance work.
 	</p>
-	<p>
-		<a href="https://smartestate.me"><strong>Website</strong></a> |
-		<a href="https://app.smartestate.me"><strong>App</strong></a> |
-		<a href="https://api.smartestate.me/docs"><strong>API Docs</strong></a>
-	</p>
 </div>
 
 ## Overview
@@ -48,14 +43,7 @@ For end users, a modern browser is enough.
 
 ## Getting Started
 
-### Option 1: Hosted app
-
-If you are using the hosted deployment, open the app at:
-
-- App: https://app.smartestate.me
-- API: https://api.smartestate.me
-
-### Option 2: Self-hosted setup
+### Self-hosted setup
 
 This repository includes a VPS bootstrap script for self-hosting.
 
@@ -76,6 +64,8 @@ The setup script will:
 - start the stack with Docker Compose
 
 The repo also includes `env.sample` with non-secret defaults that the setup script uses as first-run prompts.
+
+Public API documentation and public docs will be added in a later release.
 
 The script is interactive on first run. If you want to automate private repository access, you can export:
 
