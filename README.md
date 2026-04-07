@@ -67,6 +67,14 @@ The repo also includes `env.sample` with non-secret defaults that the setup scri
 
 The script prompts interactively for GitHub credentials each run when private repositories are used.
 
+Use your own private backend and dashboard Git URLs when prompted. The defaults shown by the script are placeholders.
+
+Security note for PAT usage:
+
+- Use a PAT with the minimum required repo read permissions.
+- Enter the PAT only at the hidden prompt in `setup.sh`.
+- Do not paste PATs into shell commands or save them in `.env` files.
+
 ## Setup Details
 
 The deployment layout expects:

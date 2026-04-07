@@ -72,11 +72,11 @@ auth_repo_url() {
   printf '%s' "${repo_url/https:\/\/github.com/https://${GITHUB_USERNAME}:${GITHUB_PAT}@github.com}"
 }
 
-read -r -p "Backend Git URL [https://github.com/smartestate/smart-estate-backend.git]: " BACKEND_REPO
-BACKEND_REPO=${BACKEND_REPO:-https://github.com/smartestate/smart-estate-backend.git}
+read -r -p "Backend Git URL [https://github.com/YOUR_ORG/smart-estate-backend.git]: " BACKEND_REPO
+BACKEND_REPO=${BACKEND_REPO:-https://github.com/YOUR_ORG/smart-estate-backend.git}
 
-read -r -p "Dashboard Git URL [https://github.com/smartestate/smart-estate-dashboard.git]: " DASHBOARD_REPO
-DASHBOARD_REPO=${DASHBOARD_REPO:-https://github.com/smartestate/smart-estate-dashboard.git}
+read -r -p "Dashboard Git URL [https://github.com/YOUR_ORG/smart-estate-dashboard.git]: " DASHBOARD_REPO
+DASHBOARD_REPO=${DASHBOARD_REPO:-https://github.com/YOUR_ORG/smart-estate-dashboard.git}
 
 read -r -p "Use custom domains? (y/N): " USE_DOMAINS
 USE_DOMAINS=${USE_DOMAINS:-N}
