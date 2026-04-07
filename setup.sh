@@ -52,6 +52,22 @@ warn() {
   printf '%s[warn]%s %s\n' "${YELLOW}" "${RESET}" "$1"
 }
 
+summary_box() {
+  local title="$1"
+  shift
+  local width=68
+  local border
+  border="$(printf '%*s' "${width}" '' | tr ' ' '-')"
+
+  printf '\n+%s+\n' "${border}"
+  printf '| %-*s |\n' "$((width - 2))" "${title}"
+  printf '+%s+\n' "${border}"
+  for line in "$@"; do
+    printf '| %-*s |\n' "$((width - 2))" "${line}"
+  done
+  printf '+%s+\n' "${border}"
+}
+
 headline() {
   cat <<'EOF'
 
@@ -527,6 +543,24 @@ fi
 
 section "Done"
 ok "Setup complete"
+
+if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
+  summary_box \
+    "Smart Estate deployment ready" \
+    "API: https://${API_DOMAIN}" \
+    "App: https://${APP_DOMAIN}" \
+    "Config: ${ENV_FILE}" \
+    "Uploads: ${DEPLOY_ROOT}/uploads" \
+    "Saved models: ${DEPLOY_ROOT}/saved_models"
+else
+  summary_box \
+    "Smart Estate deployment ready" \
+    "API: http://${API_DOMAIN}:8000" \
+    "App: http://${APP_DOMAIN}:3000" \
+    "Config: ${ENV_FILE}" \
+    "Uploads: ${DEPLOY_ROOT}/uploads" \
+    "Saved models: ${DEPLOY_ROOT}/saved_models"
+fi
 
 unset GITHUB_USERNAME
 unset GITHUB_PAT
