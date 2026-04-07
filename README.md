@@ -65,12 +65,7 @@ The setup script will:
 
 The repo also includes `env.sample` with non-secret defaults that the setup script uses as first-run prompts.
 
-The script is interactive on first run. If you want to automate private repository access, you can export:
-
-```bash
-export GITHUB_USERNAME="your-username"
-export GITHUB_PAT="your-pat"
-```
+The script prompts interactively for GitHub credentials each run when private repositories are used.
 
 ## Setup Details
 
@@ -116,7 +111,7 @@ Yes. Rerun the setup script. Existing secrets in `/opt/smartestate/.env` are pre
 
 ### Private GitHub repositories fail to clone
 
-- Export `GITHUB_USERNAME` and `GITHUB_PAT` before running `setup.sh`.
+- Enter your GitHub username and PAT at the setup prompt.
 - Make sure the PAT has read access to both private repositories.
 
 ### Media uploads fail
