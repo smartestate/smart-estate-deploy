@@ -161,7 +161,12 @@ echo "Updating packages..."
 apt update && apt upgrade -y
 
 echo "Installing dependencies..."
-apt install -y docker.io docker-compose docker-compose-plugin nginx certbot python3-certbot-nginx ufw git openssl curl
+apt install -y docker.io nginx certbot python3-certbot-nginx ufw git openssl curl
+
+# Compose package names vary by distro/repo. Try common options.
+if ! apt install -y docker-compose-plugin; then
+  apt install -y docker-compose-v2 || apt install -y docker-compose || true
+fi
 
 echo "Configuring firewall..."
 ufw allow 22
@@ -172,6 +177,16 @@ ufw --force enable
 echo "Enabling Docker..."
 systemctl enable docker
 systemctl start docker
+
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE_CMD=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE_CMD=(docker-compose)
+else
+  echo "Error: Docker Compose is not installed."
+  echo "Install one of: docker-compose-plugin, docker-compose-v2, or docker-compose"
+  exit 1
+fi
 
 mkdir -p "${DEPLOY_ROOT}" "${DEPLOY_ROOT}/uploads" "${DEPLOY_ROOT}/saved_models"
 
@@ -291,7 +306,7 @@ nginx -t && systemctl reload nginx
 
 echo "Starting stack with Docker Compose..."
 cd "${DEPLOY_ROOT}"
-docker compose --env-file .env up -d --build
+"${COMPOSE_CMD[@]}" --env-file .env up -d --build
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
   echo "Run SSL provisioning after DNS propagation:"

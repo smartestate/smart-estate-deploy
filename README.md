@@ -117,6 +117,11 @@ Yes. Rerun the setup script. Existing secrets in `/opt/smartestate/.env` are pre
 - Check `docker compose logs -f` inside `/opt/smartestate`.
 - Verify `/opt/smartestate/.env` exists and includes `DB_USER`, `DB_PASSWORD`, and `JWT_SECRET_KEY`.
 
+### `docker-compose-plugin` package not found
+
+- Some distros expose Compose as `docker-compose-v2` or `docker-compose` instead.
+- The setup script now tries `docker-compose-plugin`, then `docker-compose-v2`, then `docker-compose` automatically.
+
 ### Private GitHub repositories fail to clone
 
 - Enter your GitHub username and PAT at the setup prompt.
