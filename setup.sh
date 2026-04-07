@@ -16,6 +16,7 @@ DEPLOY_ROOT="/opt/smartestate"
 ENV_FILE="${DEPLOY_ROOT}/.env"
 SAMPLE_FILE="${SCRIPT_DIR}/env.sample"
 VERBOSE=0
+LOG_FILE="/tmp/smartestate-setup.log"
 
 if [[ -t 1 ]]; then
   RESET=$'\033[0m'
@@ -60,6 +61,47 @@ warn() {
 fail() {
   printf '%s[error]%s %s\n' "${RED}" "${RESET}" "$1"
   exit 1
+}
+
+run_cmd() {
+  local description="$1"
+  shift
+
+  if [[ "${VERBOSE}" == "1" ]]; then
+    note "${description}"
+    "$@"
+    return
+  fi
+
+  if "$@" >>"${LOG_FILE}" 2>&1; then
+    return
+  fi
+
+  warn "${description} failed. See ${LOG_FILE}"
+  tail -n 40 "${LOG_FILE}" >&2 || true
+  exit 1
+}
+
+run_cmd_optional() {
+  local description="$1"
+  shift
+
+  if [[ "${VERBOSE}" == "1" ]]; then
+    note "${description}"
+    "$@"
+    return $?
+  fi
+
+  "$@" >>"${LOG_FILE}" 2>&1
+  return $?
+}
+
+git_cmd() {
+  if [[ "${VERBOSE}" == "1" ]]; then
+    git "$@"
+  else
+    git "$@" >>"${LOG_FILE}" 2>&1
+  fi
 }
 
 summary_box() {
@@ -270,7 +312,7 @@ wait_for_http_ok() {
   local elapsed_seconds=0
 
   while (( elapsed_seconds <= timeout_seconds )); do
-    if curl -fsS "${url}" >/dev/null; then
+    if curl -fs --max-time 5 "${url}" >/dev/null 2>&1; then
       return 0
     fi
 
@@ -314,6 +356,10 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [[ "${VERBOSE}" != "1" ]]; then
+  : >"${LOG_FILE}"
+fi
 
 self_update_from_origin_main "$@"
 
@@ -486,26 +532,18 @@ if [[ "${PROCEED_INSTALL}" != "Y" ]]; then
 fi
 
 section "System Setup"
-note "Updating packages..."
-apt update && apt upgrade -y
+run_cmd "Updating packages" bash -lc "apt update && apt upgrade -y"
 
-note "Installing dependencies..."
-apt install -y docker.io nginx certbot python3-certbot-nginx ufw git openssl curl
+run_cmd "Installing dependencies" apt install -y docker.io nginx certbot python3-certbot-nginx ufw git openssl curl
 
 # Compose package names vary by distro/repo. Try common options.
-if ! apt install -y docker-compose-plugin; then
-  apt install -y docker-compose-v2 || apt install -y docker-compose || true
+if ! run_cmd_optional "Installing docker-compose-plugin" apt install -y docker-compose-plugin; then
+  run_cmd_optional "Installing docker-compose-v2" apt install -y docker-compose-v2 || run_cmd_optional "Installing docker-compose" apt install -y docker-compose || true
 fi
 
-note "Configuring firewall..."
-ufw allow 22
-ufw allow 80
-ufw allow 443
-ufw --force enable
+run_cmd "Configuring firewall" bash -lc "ufw allow 22 && ufw allow 80 && ufw allow 443 && ufw --force enable"
 
-note "Enabling Docker..."
-systemctl enable docker
-systemctl start docker
+run_cmd "Enabling Docker service" bash -lc "systemctl enable docker && systemctl start docker"
 
 if docker compose version >/dev/null 2>&1; then
   COMPOSE_CMD=(docker compose)
@@ -525,18 +563,18 @@ clone_or_pull() {
 
   if [[ -d "${target_dir}/.git" ]]; then
     local original_remote_url
-    original_remote_url="$(git -C "${target_dir}" remote get-url origin)"
+    original_remote_url="$(git -C "${target_dir}" remote get-url origin 2>/dev/null || true)"
     if [[ "${auth_url}" != "${original_remote_url}" ]]; then
-      git -C "${target_dir}" remote set-url origin "${auth_url}"
+      git_cmd -C "${target_dir}" remote set-url origin "${auth_url}"
     fi
     trap "git -C '${target_dir}' remote set-url origin '${original_remote_url}' >/dev/null 2>&1 || true" RETURN
-    git -C "${target_dir}" fetch --all
-    git -C "${target_dir}" checkout main || true
-    git -C "${target_dir}" pull --ff-only origin main || true
+    git_cmd -C "${target_dir}" fetch --all
+    git_cmd -C "${target_dir}" checkout main || true
+    git_cmd -C "${target_dir}" pull --ff-only origin main || true
   else
-    git clone "${auth_url}" "${target_dir}"
+    git_cmd clone "${auth_url}" "${target_dir}"
     if [[ -n "${GITHUB_USERNAME}" && -n "${GITHUB_PAT}" ]]; then
-      git -C "${target_dir}" remote set-url origin "${repo_url}"
+      git_cmd -C "${target_dir}" remote set-url origin "${repo_url}"
     fi
   fi
 }
@@ -630,12 +668,11 @@ server {
 }
 EOF
 
-ln -sf /etc/nginx/sites-available/smartestate /etc/nginx/sites-enabled/smartestate
-nginx -t && systemctl reload nginx
+run_cmd "Applying Nginx configuration" bash -lc "ln -sf /etc/nginx/sites-available/smartestate /etc/nginx/sites-enabled/smartestate && nginx -t && systemctl reload nginx"
 
 note "Starting stack with Docker Compose..."
 cd "${DEPLOY_ROOT}"
-"${COMPOSE_CMD[@]}" --env-file .env up -d --build
+run_cmd "Building and starting containers" "${COMPOSE_CMD[@]}" --env-file .env up -d --build
 
 section "Validation"
 note "Running post-deploy smoke checks..."
@@ -660,8 +697,7 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
       CERTBOT_CMD+=(--register-unsafely-without-email)
     fi
 
-    note "Running SSL provisioning now that DNS points to this VPS..."
-    "${CERTBOT_CMD[@]}"
+    run_cmd "Provisioning SSL certificates" "${CERTBOT_CMD[@]}"
 
     note "Waiting for API HTTPS readiness (up to 90s)..."
     if wait_for_http_ok "https://${API_DOMAIN}/health" 90 3; then
@@ -687,8 +723,7 @@ if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
         CERTBOT_CMD+=(--register-unsafely-without-email)
       fi
 
-      note "Running SSL provisioning after DNS propagation wait..."
-      "${CERTBOT_CMD[@]}"
+      run_cmd "Provisioning SSL certificates after DNS propagation" "${CERTBOT_CMD[@]}"
 
       note "Waiting for API HTTPS readiness (up to 90s)..."
       if wait_for_http_ok "https://${API_DOMAIN}/health" 90 3; then
