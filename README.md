@@ -65,6 +65,13 @@ chmod +x setup.sh
 sudo ./setup.sh
 ```
 
+Advanced update (skip installer self-update):
+
+```bash
+cd /opt/smartestate-deploy
+sudo ./setup.sh --no-self-update
+```
+
 Notes:
 
 - Existing `/opt/smartestate/.env` secrets (like `JWT_SECRET_KEY` and `DB_PASSWORD`) are preserved.

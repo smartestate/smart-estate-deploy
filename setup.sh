@@ -76,6 +76,11 @@ summary_box() {
 }
 
 self_update_from_origin_main() {
+  if [[ "${SKIP_SELF_UPDATE:-0}" == "1" ]]; then
+    note "Self-update disabled via --no-self-update"
+    return
+  fi
+
   if [[ "${SETUP_SELF_UPDATED:-0}" == "1" ]]; then
     return
   fi
@@ -226,6 +231,32 @@ wait_for_dns_match() {
   printf '%s' "${resolved_ip}"
   return 1
 }
+
+print_usage() {
+  cat <<'EOF'
+Usage: ./setup.sh [options]
+
+Options:
+  --no-self-update    Skip auto-update from origin/main
+  -h, --help          Show this help message
+EOF
+}
+
+SKIP_SELF_UPDATE=0
+for arg in "$@"; do
+  case "${arg}" in
+    --no-self-update)
+      SKIP_SELF_UPDATE=1
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    *)
+      fail "Unknown option: ${arg}. Use --help to see valid options."
+      ;;
+  esac
+done
 
 headline
 note "This setup will configure Docker, Nginx, Certbot, firewall, and app deployment."
