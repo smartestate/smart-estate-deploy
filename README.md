@@ -53,3 +53,4 @@ Then create a GitHub Release from that tag and mark it as pre-release.
 - Final app runtime root is /opt/smartestate.
 - Shared env file is /opt/smartestate/.env.
 - Backend uploads are persisted at /opt/smartestate/uploads.
+- If /opt/smartestate/.env already exists, the setup script keeps existing JWT_SECRET_KEY and DB_PASSWORD values and only generates missing secrets.

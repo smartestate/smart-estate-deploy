@@ -15,6 +15,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_ROOT="/opt/smartestate"
 ENV_FILE="${DEPLOY_ROOT}/.env"
 
+get_env_value() {
+  local key="$1"
+  local value=""
+
+  if [[ -f "${ENV_FILE}" ]]; then
+    value="$(grep -E "^${key}=" "${ENV_FILE}" | tail -n 1 | cut -d= -f2- || true)"
+  fi
+
+  printf '%s' "${value}"
+}
+
+prompt_default() {
+  local prompt_text="$1"
+  local default_value="$2"
+  local response=""
+
+  if [[ -n "${default_value}" ]]; then
+    read -r -p "${prompt_text} [${default_value}]: " response
+    printf '%s' "${response:-${default_value}}"
+  else
+    read -r -p "${prompt_text}: " response
+    printf '%s' "${response}"
+  fi
+}
+
 echo "== Smart Estate VPS Setup =="
 echo "This will configure Docker, Nginx, Certbot, firewall, and app deployment."
 
@@ -39,18 +64,51 @@ else
   APP_DOMAIN="${VPS_IP}"
 fi
 
-read -r -p "OpenAI API key (optional, leave blank to skip): " OPENAI_API_KEY
-read -r -p "OpenRouteService API key (optional, leave blank to skip): " ORS_API_KEY
-read -r -p "Sentry DSN (optional, leave blank to skip): " SENTRY_DSN
-read -r -p "DB user [smartestate]: " DB_USER
-DB_USER=${DB_USER:-smartestate}
-read -r -p "DB name [smartestate]: " DB_NAME
-DB_NAME=${DB_NAME:-smartestate}
+EXISTING_DB_USER="$(get_env_value DB_USER)"
+EXISTING_DB_PASSWORD="$(get_env_value DB_PASSWORD)"
+EXISTING_DB_NAME="$(get_env_value DB_NAME)"
+EXISTING_JWT_SECRET_KEY="$(get_env_value JWT_SECRET_KEY)"
+EXISTING_OPENAI_API_KEY="$(get_env_value OPENAI_API_KEY)"
+EXISTING_ORS_API_KEY="$(get_env_value ORS_API_KEY)"
+EXISTING_SENTRY_DSN="$(get_env_value SENTRY_DSN)"
+EXISTING_CORS_ORIGINS="$(get_env_value CORS_ORIGINS)"
+EXISTING_VITE_API_URL="$(get_env_value VITE_API_URL)"
+EXISTING_ENVIRONMENT="$(get_env_value ENVIRONMENT)"
+EXISTING_UPLOAD_DIR="$(get_env_value UPLOAD_DIR)"
 
-JWT_SECRET_KEY="$(openssl rand -hex 32)"
-DB_PASSWORD="$(openssl rand -hex 16)"
+OPENAI_API_KEY="${EXISTING_OPENAI_API_KEY}"
+if [[ -z "${OPENAI_API_KEY}" ]]; then
+  read -r -p "OpenAI API key (optional, leave blank to skip): " OPENAI_API_KEY
+fi
 
-echo "Generated JWT_SECRET_KEY and DB_PASSWORD."
+ORS_API_KEY="${EXISTING_ORS_API_KEY}"
+if [[ -z "${ORS_API_KEY}" ]]; then
+  read -r -p "OpenRouteService API key (optional, leave blank to skip): " ORS_API_KEY
+fi
+
+SENTRY_DSN="${EXISTING_SENTRY_DSN}"
+if [[ -z "${SENTRY_DSN}" ]]; then
+  read -r -p "Sentry DSN (optional, leave blank to skip): " SENTRY_DSN
+fi
+
+DB_USER="$(prompt_default "DB user" "${EXISTING_DB_USER:-smartestate}")"
+DB_NAME="$(prompt_default "DB name" "${EXISTING_DB_NAME:-smartestate}")"
+
+if [[ -n "${EXISTING_JWT_SECRET_KEY}" ]]; then
+  JWT_SECRET_KEY="${EXISTING_JWT_SECRET_KEY}"
+  echo "Keeping existing JWT_SECRET_KEY from ${ENV_FILE}."
+else
+  JWT_SECRET_KEY="$(openssl rand -hex 32)"
+  echo "Generated JWT_SECRET_KEY."
+fi
+
+if [[ -n "${EXISTING_DB_PASSWORD}" ]]; then
+  DB_PASSWORD="${EXISTING_DB_PASSWORD}"
+  echo "Keeping existing DB_PASSWORD from ${ENV_FILE}."
+else
+  DB_PASSWORD="$(openssl rand -hex 16)"
+  echo "Generated DB_PASSWORD."
+fi
 
 echo "Updating packages..."
 apt update && apt upgrade -y
@@ -97,12 +155,26 @@ if [[ ! -f "${DEPLOY_ROOT}/smart-estate-dashboard/Dockerfile" ]]; then
   exit 1
 fi
 
-CORS_ORIGINS="https://${APP_DOMAIN},https://${API_DOMAIN}"
-VITE_API_URL="https://${API_DOMAIN}"
-if [[ ! "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  CORS_ORIGINS="http://${APP_DOMAIN}:3000,http://${API_DOMAIN}:3000"
-  VITE_API_URL="http://${API_DOMAIN}:8000"
+if [[ -n "${EXISTING_CORS_ORIGINS}" ]]; then
+  CORS_ORIGINS="${EXISTING_CORS_ORIGINS}"
+else
+  CORS_ORIGINS="https://${APP_DOMAIN},https://${API_DOMAIN}"
+  if [[ ! "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
+    CORS_ORIGINS="http://${APP_DOMAIN}:3000,http://${API_DOMAIN}:3000"
+  fi
 fi
+
+if [[ -n "${EXISTING_VITE_API_URL}" ]]; then
+  VITE_API_URL="${EXISTING_VITE_API_URL}"
+else
+  VITE_API_URL="https://${API_DOMAIN}"
+  if [[ ! "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
+    VITE_API_URL="http://${API_DOMAIN}:8000"
+  fi
+fi
+
+ENVIRONMENT="${EXISTING_ENVIRONMENT:-production}"
+UPLOAD_DIR="${EXISTING_UPLOAD_DIR:-/app/uploads}"
 
 cat > "${ENV_FILE}" <<EOF
 DB_USER=${DB_USER}
@@ -120,8 +192,8 @@ ORS_API_KEY=${ORS_API_KEY}
 
 CORS_ORIGINS=${CORS_ORIGINS}
 SENTRY_DSN=${SENTRY_DSN}
-ENVIRONMENT=production
-UPLOAD_DIR=/app/uploads
+ENVIRONMENT=${ENVIRONMENT}
+UPLOAD_DIR=${UPLOAD_DIR}
 VITE_API_URL=${VITE_API_URL}
 EOF
 chmod 600 "${ENV_FILE}"
