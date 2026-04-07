@@ -52,11 +52,6 @@ prompt_default() {
   fi
 }
 
-domain_resolves() {
-  local domain="$1"
-  getent ahosts "${domain}" >/dev/null 2>&1
-}
-
 echo "== Smart Estate VPS Setup =="
 cat <<'EOF'
 
@@ -143,8 +138,19 @@ if [[ -z "${SENTRY_DSN}" ]]; then
   read -r -p "Sentry DSN (optional, leave blank to skip): " SENTRY_DSN
 fi
 
-DB_USER="$(prompt_default "DB user" "${EXISTING_DB_USER:-${SAMPLE_DB_USER:-smartestate}}")"
-DB_NAME="$(prompt_default "DB name" "${EXISTING_DB_NAME:-${SAMPLE_DB_NAME:-smartestate}}")"
+if [[ -n "${EXISTING_DB_USER}" ]]; then
+  DB_USER="${EXISTING_DB_USER}"
+  echo "Keeping existing DB_USER from ${ENV_FILE}."
+else
+  DB_USER="$(prompt_default "DB user" "${SAMPLE_DB_USER:-smartestate}")"
+fi
+
+if [[ -n "${EXISTING_DB_NAME}" ]]; then
+  DB_NAME="${EXISTING_DB_NAME}"
+  echo "Keeping existing DB_NAME from ${ENV_FILE}."
+else
+  DB_NAME="$(prompt_default "DB name" "${SAMPLE_DB_NAME:-smartestate}")"
+fi
 
 if [[ -n "${EXISTING_JWT_SECRET_KEY}" ]]; then
   JWT_SECRET_KEY="${EXISTING_JWT_SECRET_KEY}"
@@ -347,20 +353,10 @@ else
 fi
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  if domain_resolves "${API_DOMAIN}" && domain_resolves "${APP_DOMAIN}"; then
-    echo "Run SSL provisioning:"
-    echo "  certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
-  else
-    echo "SSL is not ready yet because one or both domains do not resolve."
-    echo "Create DNS A or AAAA records for:"
-    echo "  ${API_DOMAIN}"
-    echo "  ${APP_DOMAIN}"
-    echo "After DNS propagates, run:"
-    echo "  certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
-    echo "You can check resolution with:"
-    echo "  dig ${API_DOMAIN} +short"
-    echo "  dig ${APP_DOMAIN} +short"
-  fi
+  echo "Run SSL provisioning after DNS propagation:"
+  echo "  certbot --nginx -d ${API_DOMAIN} -d ${APP_DOMAIN}"
+  echo "Then verify DNS:"
+  echo "  dig ${API_DOMAIN} +short"
 else
   echo "Custom domains not configured. Use these URLs:"
   echo "  API: http://${API_DOMAIN}:8000"
