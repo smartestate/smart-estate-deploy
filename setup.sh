@@ -170,6 +170,34 @@ prompt_secret_value() {
   printf '%s' "${response}"
 }
 
+prompt_yes_no() {
+  local label="$1"
+  local default_value="$2"
+  local response=""
+
+  while true; do
+    response="$(prompt_value "${label}" "${default_value}")"
+    response="${response,,}"
+    if [[ -z "${response}" ]]; then
+      response="${default_value,,}"
+    fi
+
+    case "${response}" in
+      y|yes)
+        printf 'Y'
+        return
+        ;;
+      n|no)
+        printf 'N'
+        return
+        ;;
+      *)
+        warn "Please answer with y or n."
+        ;;
+    esac
+  done
+}
+
 get_env_value() {
   local key="$1"
   local value=""
@@ -260,12 +288,19 @@ done
 
 headline
 note "This setup will configure Docker, Nginx, Certbot, firewall, and app deployment."
+note "Press Enter to accept defaults shown in [brackets]."
+note "You can safely rerun this script later for updates."
 self_update_from_origin_main "$@"
 
 section "Repository Access"
+note "If backend/dashboard repos are private: enter GitHub username + PAT."
+note "If repos are public: leave username blank and continue."
 GITHUB_USERNAME="$(prompt_value "GitHub username for private repos (leave blank for public repos)" "")"
 if [[ -n "${GITHUB_USERNAME}" ]]; then
+  note "PAT input is hidden. Paste token and press Enter."
   GITHUB_PAT="$(prompt_secret_value "GitHub PAT with repo read access")"
+else
+  note "Using public clone mode (no GitHub credentials)."
 fi
 
 auth_repo_url() {
@@ -280,6 +315,8 @@ auth_repo_url() {
 }
 
 section "Application Sources"
+note "Provide repository clone URLs for backend and dashboard."
+note "Tip: use your org URLs (defaults are placeholders)."
 BACKEND_REPO="$(prompt_value "Backend Git URL" "https://github.com/YOUR_ORG/smart-estate-backend.git")"
 
 DASHBOARD_REPO="$(prompt_value "Dashboard Git URL" "https://github.com/YOUR_ORG/smart-estate-dashboard.git")"
@@ -308,10 +345,11 @@ SAMPLE_VITE_API_URL="$(get_sample_value VITE_API_URL)"
 section "Domains and SSL"
 warn "If you plan to use custom domains, create the DNS A records at your registrar first."
 note "Point both api and app subdomains to this VPS IP before continuing with SSL setup."
-USE_DOMAINS="$(prompt_value "Use custom domains? (y/N)" "N")"
+USE_DOMAINS="$(prompt_yes_no "Use custom domains? (y/N)" "N")"
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
   CERTBOT_EMAIL=""
+  note "Email is recommended for expiry notices (optional)."
   CERTBOT_EMAIL="$(prompt_value "SSL certificate email (optional, leave blank to skip)" "")"
 
   if [[ -n "${EXISTING_API_DOMAIN}" && -n "${EXISTING_APP_DOMAIN}" ]]; then
@@ -331,6 +369,7 @@ else
   VPS_IP="$(hostname -I | awk '{print $1}')"
   API_DOMAIN="${VPS_IP}"
   APP_DOMAIN="${VPS_IP}"
+  note "Using IP-based mode without custom domains."
 fi
 
 section "Secrets and Runtime Settings"
@@ -378,6 +417,23 @@ if [[ -n "${EXISTING_DB_PASSWORD}" ]]; then
 else
   DB_PASSWORD="$(openssl rand -hex 16)"
   ok "Generated DB_PASSWORD."
+fi
+
+section "Review"
+summary_box \
+  "Confirm deployment inputs" \
+  "Backend repo: ${BACKEND_REPO}" \
+  "Dashboard repo: ${DASHBOARD_REPO}" \
+  "Use custom domains: ${USE_DOMAINS}" \
+  "API target: ${API_DOMAIN}" \
+  "App target: ${APP_DOMAIN}" \
+  "Deploy path: ${DEPLOY_ROOT}" \
+  "Config file: ${ENV_FILE}"
+
+PROCEED_INSTALL="$(prompt_yes_no "Proceed with installation now? (Y/n)" "Y")"
+if [[ "${PROCEED_INSTALL}" != "Y" ]]; then
+  warn "Installation cancelled by user before system changes."
+  exit 0
 fi
 
 section "System Setup"

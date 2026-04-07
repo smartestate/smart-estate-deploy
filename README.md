@@ -77,6 +77,13 @@ Notes:
 - Existing `/opt/smartestate/.env` secrets (like `JWT_SECRET_KEY` and `DB_PASSWORD`) are preserved.
 - Re-running setup is safe and reapplies deployment state.
 
+Prompt walkthrough (what you will be asked):
+
+- Repository Access: enter GitHub username + PAT only for private repos; leave blank for public repos.
+- Application Sources: confirm backend and dashboard Git clone URLs.
+- Domains and SSL: choose domain mode, then provide domain names/email if using HTTPS domains.
+- Review: script shows a summary and asks for final confirmation before package installs and deployment changes.
+
 The setup script will:
 
 - install Docker, Docker Compose, Nginx, Certbot, UFW, and Git
