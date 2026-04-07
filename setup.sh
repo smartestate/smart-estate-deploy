@@ -90,8 +90,9 @@ run_cmd() {
   cmd_status=$?
   set -e
 
+  printf '\r\033[2K'
   if [[ "${cmd_status}" == "0" ]]; then
-    printf '\r[ok] %s\n' "${description}"
+    printf '[ok] %s\n' "${description}"
     return
   fi
 
@@ -127,10 +128,9 @@ run_cmd_optional() {
   cmd_status=$?
   set -e
 
+  printf '\r\033[2K'
   if [[ "${cmd_status}" == "0" ]]; then
-    printf '\r[ok] %s\n' "${description}"
-  else
-    printf '\r[warn] %s failed (continuing)\n' "${description}"
+    printf '[ok] %s\n' "${description}"
   fi
 
   return "${cmd_status}"
@@ -578,7 +578,11 @@ run_cmd "Installing dependencies" apt install -y docker.io nginx certbot python3
 
 # Compose package names vary by distro/repo. Try common options.
 if ! run_cmd_optional "Installing docker-compose-plugin" apt install -y docker-compose-plugin; then
-  run_cmd_optional "Installing docker-compose-v2" apt install -y docker-compose-v2 || run_cmd_optional "Installing docker-compose" apt install -y docker-compose || true
+  if ! run_cmd_optional "Installing docker-compose-v2" apt install -y docker-compose-v2; then
+    if ! run_cmd_optional "Installing docker-compose" apt install -y docker-compose; then
+      warn "Could not install any Compose package automatically (tried docker-compose-plugin, docker-compose-v2, docker-compose)."
+    fi
+  fi
 fi
 
 run_cmd "Configuring firewall" bash -lc "ufw allow 22 && ufw allow 80 && ufw allow 443 && ufw --force enable"
