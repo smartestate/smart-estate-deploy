@@ -38,6 +38,14 @@ get_sample_value() {
   printf '%s' "${value}"
 }
 
+extract_host_from_url() {
+  local url="$1"
+  url="${url#*://}"
+  url="${url%%/*}"
+  url="${url%%:*}"
+  printf '%s' "${url}"
+}
+
 prompt_default() {
   local prompt_text="$1"
   local default_value="$2"
@@ -93,11 +101,21 @@ read -r -p "Use custom domains? (y/N): " USE_DOMAINS
 USE_DOMAINS=${USE_DOMAINS:-N}
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  read -r -p "API domain [api.your-domain.com]: " API_DOMAIN
-  API_DOMAIN=${API_DOMAIN:-api.your-domain.com}
+  if [[ -n "${EXISTING_API_DOMAIN}" && -n "${EXISTING_APP_DOMAIN}" ]]; then
+    API_DOMAIN="${EXISTING_API_DOMAIN}"
+    APP_DOMAIN="${EXISTING_APP_DOMAIN}"
+    echo "Keeping existing API_DOMAIN and APP_DOMAIN from ${ENV_FILE}."
+  elif [[ -n "${EXISTING_VITE_API_URL}" && -n "${EXISTING_CORS_ORIGINS}" ]]; then
+    API_DOMAIN="$(extract_host_from_url "${EXISTING_VITE_API_URL}")"
+    APP_DOMAIN="$(printf '%s' "${EXISTING_CORS_ORIGINS}" | cut -d, -f1 | sed -E 's#^https?://##; s#/.*$##; s/:.*$##')"
+    echo "Derived API_DOMAIN and APP_DOMAIN from existing deployment settings."
+  else
+    read -r -p "API domain [api.your-domain.com]: " API_DOMAIN
+    API_DOMAIN=${API_DOMAIN:-api.your-domain.com}
 
-  read -r -p "App domain [app.your-domain.com]: " APP_DOMAIN
-  APP_DOMAIN=${APP_DOMAIN:-app.your-domain.com}
+    read -r -p "App domain [app.your-domain.com]: " APP_DOMAIN
+    APP_DOMAIN=${APP_DOMAIN:-app.your-domain.com}
+  fi
 else
   VPS_IP="$(hostname -I | awk '{print $1}')"
   API_DOMAIN="${VPS_IP}"
@@ -113,6 +131,8 @@ EXISTING_ORS_API_KEY="$(get_env_value ORS_API_KEY)"
 EXISTING_SENTRY_DSN="$(get_env_value SENTRY_DSN)"
 EXISTING_CORS_ORIGINS="$(get_env_value CORS_ORIGINS)"
 EXISTING_VITE_API_URL="$(get_env_value VITE_API_URL)"
+EXISTING_API_DOMAIN="$(get_env_value API_DOMAIN)"
+EXISTING_APP_DOMAIN="$(get_env_value APP_DOMAIN)"
 EXISTING_ENVIRONMENT="$(get_env_value ENVIRONMENT)"
 EXISTING_UPLOAD_DIR="$(get_env_value UPLOAD_DIR)"
 
@@ -279,6 +299,8 @@ SENTRY_DSN=${SENTRY_DSN}
 ENVIRONMENT=${ENVIRONMENT}
 UPLOAD_DIR=${UPLOAD_DIR}
 VITE_API_URL=${VITE_API_URL}
+API_DOMAIN=${API_DOMAIN}
+APP_DOMAIN=${APP_DOMAIN}
 EOF
 chmod 600 "${ENV_FILE}"
 
