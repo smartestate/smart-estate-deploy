@@ -65,8 +65,6 @@ The setup script will:
 
 The repo also includes `env.sample` with non-secret defaults that the setup script uses as first-run prompts.
 
-Public API documentation and public docs will be added in a later release.
-
 The script is interactive on first run. If you want to automate private repository access, you can export:
 
 ```bash
@@ -133,7 +131,7 @@ Yes. Rerun the setup script. Existing secrets in `/opt/smartestate/.env` are pre
 
 ## Contact
 
-- For hosted deployments, contact your Smart Estate administrator or support team.
+- For product questions, contact your Smart Estate administrator or support team.
 - For self-hosted deployments, open a GitHub issue in this repository.
 
 ## Release Notes
