@@ -93,11 +93,11 @@ read -r -p "Use custom domains? (y/N): " USE_DOMAINS
 USE_DOMAINS=${USE_DOMAINS:-N}
 
 if [[ "${USE_DOMAINS}" =~ ^[Yy]$ ]]; then
-  read -r -p "API domain [api.smartestate.me]: " API_DOMAIN
-  API_DOMAIN=${API_DOMAIN:-api.smartestate.me}
+  read -r -p "API domain [api.your-domain.com]: " API_DOMAIN
+  API_DOMAIN=${API_DOMAIN:-api.your-domain.com}
 
-  read -r -p "App domain [app.smartestate.me]: " APP_DOMAIN
-  APP_DOMAIN=${APP_DOMAIN:-app.smartestate.me}
+  read -r -p "App domain [app.your-domain.com]: " APP_DOMAIN
+  APP_DOMAIN=${APP_DOMAIN:-app.your-domain.com}
 else
   VPS_IP="$(hostname -I | awk '{print $1}')"
   API_DOMAIN="${VPS_IP}"
