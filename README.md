@@ -47,12 +47,27 @@ For end users, a modern browser is enough.
 
 This repository includes a VPS bootstrap script for self-hosting.
 
+Safest workflow for both new installs and updates (recommended):
+
 ```bash
-git clone https://github.com/smartestate/smart-estate.git /opt/smartestate-deploy
-cd /opt/smartestate-deploy
+if [ -d /opt/smartestate-deploy/.git ]; then
+	cd /opt/smartestate-deploy
+	git pull --ff-only
+else
+	git clone https://github.com/smartestate/smart-estate.git /opt/smartestate-deploy
+	cd /opt/smartestate-deploy
+fi
+
 chmod +x setup.sh
 sudo ./setup.sh
 ```
+
+Why this is safest:
+
+- avoids clone failures when the folder already exists
+- always fast-forwards to the latest tested deployment script
+- keeps existing `/opt/smartestate/.env` secrets (like `JWT_SECRET_KEY` and `DB_PASSWORD`) intact
+- re-applies Docker/Nginx/compose deployment state consistently
 
 The setup script will:
 
