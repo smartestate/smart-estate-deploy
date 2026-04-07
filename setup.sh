@@ -73,7 +73,25 @@ run_cmd() {
     return
   fi
 
-  if "$@" >>"${LOG_FILE}" 2>&1; then
+  printf '[..] %s' "${description}"
+  "$@" >>"${LOG_FILE}" 2>&1 &
+  local cmd_pid=$!
+  local spinner='|/-\\'
+  local spin_idx=0
+  local cmd_status=0
+
+  while kill -0 "${cmd_pid}" >/dev/null 2>&1; do
+    printf '\r[..] %s %c' "${description}" "${spinner:spin_idx++%${#spinner}:1}"
+    sleep 0.15
+  done
+
+  set +e
+  wait "${cmd_pid}"
+  cmd_status=$?
+  set -e
+
+  if [[ "${cmd_status}" == "0" ]]; then
+    printf '\r[ok] %s\n' "${description}"
     return
   fi
 
@@ -92,8 +110,30 @@ run_cmd_optional() {
     return $?
   fi
 
-  "$@" >>"${LOG_FILE}" 2>&1
-  return $?
+  printf '[..] %s' "${description}"
+  "$@" >>"${LOG_FILE}" 2>&1 &
+  local cmd_pid=$!
+  local spinner='|/-\\'
+  local spin_idx=0
+  local cmd_status=0
+
+  while kill -0 "${cmd_pid}" >/dev/null 2>&1; do
+    printf '\r[..] %s %c' "${description}" "${spinner:spin_idx++%${#spinner}:1}"
+    sleep 0.15
+  done
+
+  set +e
+  wait "${cmd_pid}"
+  cmd_status=$?
+  set -e
+
+  if [[ "${cmd_status}" == "0" ]]; then
+    printf '\r[ok] %s\n' "${description}"
+  else
+    printf '\r[warn] %s failed (continuing)\n' "${description}"
+  fi
+
+  return "${cmd_status}"
 }
 
 git_cmd() {
