@@ -155,6 +155,8 @@ apt_get_cmd() {
     "$@"
 }
 
+export -f apt_get_cmd
+
 git_cmd() {
   if [[ "${VERBOSE}" == "1" ]]; then
     git "$@"
