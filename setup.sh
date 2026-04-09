@@ -80,6 +80,8 @@ run_cmd() {
   local spin_idx=0
   local cmd_status=0
 
+  trap 'kill "${cmd_pid}" >/dev/null 2>&1 || true; wait "${cmd_pid}" >/dev/null 2>&1 || true; printf "\n"; exit 130' INT TERM
+
   while kill -0 "${cmd_pid}" >/dev/null 2>&1; do
     printf '\r[..] %s %c' "${description}" "${spinner:spin_idx++%${#spinner}:1}"
     sleep 0.15
@@ -89,6 +91,7 @@ run_cmd() {
   wait "${cmd_pid}"
   cmd_status=$?
   set -e
+  trap - INT TERM
 
   printf '\r\033[2K'
   if [[ "${cmd_status}" == "0" ]]; then
@@ -118,6 +121,8 @@ run_cmd_optional() {
   local spin_idx=0
   local cmd_status=0
 
+  trap 'kill "${cmd_pid}" >/dev/null 2>&1 || true; wait "${cmd_pid}" >/dev/null 2>&1 || true; printf "\n"; exit 130' INT TERM
+
   while kill -0 "${cmd_pid}" >/dev/null 2>&1; do
     printf '\r[..] %s %c' "${description}" "${spinner:spin_idx++%${#spinner}:1}"
     sleep 0.15
@@ -127,6 +132,7 @@ run_cmd_optional() {
   wait "${cmd_pid}"
   cmd_status=$?
   set -e
+  trap - INT TERM
 
   printf '\r\033[2K'
   if [[ "${cmd_status}" == "0" ]]; then
@@ -134,6 +140,19 @@ run_cmd_optional() {
   fi
 
   return "${cmd_status}"
+}
+
+apt_get_cmd() {
+  local apt_args=()
+  if [[ "${VERBOSE}" == "1" ]]; then
+    apt_args+=("-o" "Dpkg::Use-Pty=0")
+  fi
+
+  DEBIAN_FRONTEND=noninteractive apt-get \
+    -o DPkg::Lock::Timeout=600 \
+    -o Acquire::Retries=3 \
+    "${apt_args[@]}" \
+    "$@"
 }
 
 git_cmd() {
@@ -641,14 +660,14 @@ if [[ "${PROCEED_INSTALL}" != "Y" ]]; then
 fi
 
 section "System Setup"
-run_cmd "Updating packages" bash -lc "apt update && apt upgrade -y"
+run_cmd "Updating packages" bash -lc "apt_get_cmd update && apt_get_cmd upgrade -y"
 
-run_cmd "Installing dependencies" apt install -y docker.io nginx certbot python3-certbot-nginx ufw git openssl curl
+run_cmd "Installing dependencies" apt_get_cmd install -y docker.io nginx certbot python3-certbot-nginx ufw git openssl curl
 
 # Compose package names vary by distro/repo. Try common options.
-if ! run_cmd_optional "Installing docker-compose-plugin" apt install -y docker-compose-plugin; then
-  if ! run_cmd_optional "Installing docker-compose-v2" apt install -y docker-compose-v2; then
-    if ! run_cmd_optional "Installing docker-compose" apt install -y docker-compose; then
+if ! run_cmd_optional "Installing docker-compose-plugin" apt_get_cmd install -y docker-compose-plugin; then
+  if ! run_cmd_optional "Installing docker-compose-v2" apt_get_cmd install -y docker-compose-v2; then
+    if ! run_cmd_optional "Installing docker-compose" apt_get_cmd install -y docker-compose; then
       warn "Could not install any Compose package automatically (tried docker-compose-plugin, docker-compose-v2, docker-compose)."
     fi
   fi
