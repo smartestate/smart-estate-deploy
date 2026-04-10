@@ -73,6 +73,15 @@ Optional:
 - `JWT_EXPIRY_MINUTES`
 - `DB_HOST`
 - `DB_PORT`
+- `GITHUB_USERNAME` (used by `setup.sh` for private repo clone auth)
+- `GITHUB_PAT` (used by `setup.sh` for private repo clone auth)
+- `BACKEND_REPO` (default backend git URL for `setup.sh` prompts)
+- `DASHBOARD_REPO` (default dashboard git URL for `setup.sh` prompts)
+
+Repository source variables:
+- `setup.sh` now reads `GITHUB_USERNAME`, `GITHUB_PAT`, `BACKEND_REPO`, and `DASHBOARD_REPO` from `/opt/smartestate/.env` and uses them as defaults.
+- Storing `GITHUB_PAT` in `.env` is supported for convenience but is not recommended for production security.
+- Prefer entering PAT interactively at runtime or using a dedicated secret manager.
 
 ## Runtime folders and files created
 - `/opt/smartestate/.env`

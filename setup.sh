@@ -452,11 +452,23 @@ note "You can safely rerun this script later for updates."
 section "Repository Access"
 note "If backend/dashboard repos are private: enter GitHub username + PAT."
 note "If repos are public: leave username blank and continue."
-GITHUB_USERNAME="$(prompt_value "GitHub username for private repos (leave blank for public repos)" "")"
+
+EXISTING_GITHUB_USERNAME="$(get_env_value GITHUB_USERNAME)"
+EXISTING_GITHUB_PAT="$(get_env_value GITHUB_PAT)"
+EXISTING_BACKEND_REPO="$(get_env_value BACKEND_REPO)"
+EXISTING_DASHBOARD_REPO="$(get_env_value DASHBOARD_REPO)"
+
+GITHUB_USERNAME="$(prompt_value "GitHub username for private repos (leave blank for public repos)" "${EXISTING_GITHUB_USERNAME}")"
 if [[ -n "${GITHUB_USERNAME}" ]]; then
-  note "PAT input is hidden. Paste token and press Enter."
-  GITHUB_PAT="$(prompt_secret_value "GitHub PAT with repo read access")"
+  if [[ -n "${EXISTING_GITHUB_PAT}" ]]; then
+    GITHUB_PAT="${EXISTING_GITHUB_PAT}"
+    warn "Using GITHUB_PAT from ${ENV_FILE}. Storing PAT in .env is not recommended for production."
+  else
+    note "PAT input is hidden. Paste token and press Enter."
+    GITHUB_PAT="$(prompt_secret_value "GitHub PAT with repo read access")"
+  fi
 else
+  GITHUB_PAT=""
   note "Using public clone mode (no GitHub credentials)."
 fi
 
@@ -475,7 +487,7 @@ section "Application Sources"
 note "Provide repository clone URLs for backend and dashboard."
 note "Tip: use your org URLs (defaults are placeholders)."
 while true; do
-  BACKEND_REPO="$(prompt_value "Backend Git URL" "https://github.com/YOUR_ORG/smart-estate-backend.git")"
+  BACKEND_REPO="$(prompt_value "Backend Git URL" "${EXISTING_BACKEND_REPO:-https://github.com/YOUR_ORG/smart-estate-backend.git}")"
   if [[ "${BACKEND_REPO}" == *"YOUR_ORG"* ]]; then
     warn "Please replace YOUR_ORG with your real GitHub org/user in Backend Git URL."
     continue
@@ -487,7 +499,7 @@ while true; do
 done
 
 while true; do
-  DASHBOARD_REPO="$(prompt_value "Dashboard Git URL" "https://github.com/YOUR_ORG/smart-estate-dashboard.git")"
+  DASHBOARD_REPO="$(prompt_value "Dashboard Git URL" "${EXISTING_DASHBOARD_REPO:-https://github.com/YOUR_ORG/smart-estate-dashboard.git}")"
   if [[ "${DASHBOARD_REPO}" == *"YOUR_ORG"* ]]; then
     warn "Please replace YOUR_ORG with your real GitHub org/user in Dashboard Git URL."
     continue
@@ -851,6 +863,10 @@ VITE_API_URL=${VITE_API_URL}
 API_DOMAIN=${API_DOMAIN}
 APP_DOMAIN=${APP_DOMAIN}
 CERTBOT_EMAIL=${CERTBOT_EMAIL}
+GITHUB_USERNAME=${GITHUB_USERNAME}
+GITHUB_PAT=${GITHUB_PAT}
+BACKEND_REPO=${BACKEND_REPO}
+DASHBOARD_REPO=${DASHBOARD_REPO}
 EOF
 chmod 600 "${ENV_FILE}"
 
