@@ -662,7 +662,8 @@ if [[ "${PROCEED_INSTALL}" != "Y" ]]; then
 fi
 
 section "System Setup"
-run_cmd "Updating packages" bash -lc "apt_get_cmd update && apt_get_cmd upgrade -y"
+run_cmd "Updating packages" apt_get_cmd update
+run_cmd "Upgrading packages" apt_get_cmd upgrade -y
 
 run_cmd "Installing dependencies" apt_get_cmd install -y docker.io nginx certbot python3-certbot-nginx ufw git openssl curl
 
@@ -686,6 +687,8 @@ elif command -v docker-compose >/dev/null 2>&1; then
 else
   fail "Docker Compose is not installed. Install one of: docker-compose-plugin, docker-compose-v2, or docker-compose"
 fi
+
+COMPOSE_WITH_ENV=("${COMPOSE_CMD[@]}" --env-file .env)
 
 mkdir -p "${DEPLOY_ROOT}" "${DEPLOY_ROOT}/uploads" "${DEPLOY_ROOT}/saved_models"
 
@@ -711,6 +714,84 @@ clone_or_pull() {
       git_cmd -C "${target_dir}" remote set-url origin "${repo_url}"
     fi
   fi
+}
+
+run_db_migrations() {
+  local migration_dir="${DEPLOY_ROOT}/smart-estate-backend/migrations"
+  local backup_dir="${DEPLOY_ROOT}/backups"
+  local schema_table="schema_migrations"
+  local ready=0
+
+  section "Database Migrations"
+  run_cmd "Starting database service" "${COMPOSE_WITH_ENV[@]}" up -d postgres
+
+  note "Waiting for Postgres readiness..."
+  for _ in {1..30}; do
+    if "${COMPOSE_WITH_ENV[@]}" exec -T postgres pg_isready -U "${DB_USER}" -d "${DB_NAME}" >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 2
+  done
+
+  if [[ "${ready}" != "1" ]]; then
+    fail "Postgres did not become ready for migrations."
+  fi
+  ok "Postgres is ready"
+
+  mkdir -p "${backup_dir}"
+  local backup_file="${backup_dir}/pre_migration_$(date +%Y%m%d_%H%M%S).sql"
+  if "${COMPOSE_WITH_ENV[@]}" exec -T postgres pg_dump -U "${DB_USER}" "${DB_NAME}" > "${backup_file}"; then
+    ok "Database backup saved to ${backup_file}"
+  else
+    fail "Database backup failed before applying migrations."
+  fi
+
+  "${COMPOSE_WITH_ENV[@]}" exec -T postgres psql -U "${DB_USER}" -d "${DB_NAME}" -v ON_ERROR_STOP=1 -c "
+    CREATE TABLE IF NOT EXISTS ${schema_table} (
+      filename TEXT PRIMARY KEY,
+      applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    );
+  " >/dev/null
+  ok "Migration tracker table is ready"
+
+  if [[ ! -d "${migration_dir}" ]]; then
+    warn "Migration directory not found at ${migration_dir}; skipping incremental migrations."
+    return
+  fi
+
+  shopt -s nullglob
+  local migration_files=("${migration_dir}"/*.sql)
+  shopt -u nullglob
+
+  if [[ ${#migration_files[@]} -eq 0 ]]; then
+    note "No migration files found in ${migration_dir}"
+    return
+  fi
+
+  local migration_file=""
+  local migration_name=""
+  local migration_name_sql=""
+  local applied=""
+
+  for migration_file in "${migration_files[@]}"; do
+    migration_name="$(basename "${migration_file}")"
+    migration_name_sql="${migration_name//\'/\'\'}"
+
+    applied="$("${COMPOSE_WITH_ENV[@]}" exec -T postgres psql -U "${DB_USER}" -d "${DB_NAME}" -tAc "SELECT 1 FROM ${schema_table} WHERE filename='${migration_name_sql}' LIMIT 1;" | tr -d '[:space:]')"
+
+    if [[ "${applied}" == "1" ]]; then
+      note "Skipping already-applied migration ${migration_name}"
+      continue
+    fi
+
+    if "${COMPOSE_WITH_ENV[@]}" exec -T postgres psql -U "${DB_USER}" -d "${DB_NAME}" -v ON_ERROR_STOP=1 < "${migration_file}"; then
+      "${COMPOSE_WITH_ENV[@]}" exec -T postgres psql -U "${DB_USER}" -d "${DB_NAME}" -v ON_ERROR_STOP=1 -c "INSERT INTO ${schema_table}(filename) VALUES ('${migration_name_sql}');" >/dev/null
+      ok "Applied migration ${migration_name}"
+    else
+      fail "Migration failed: ${migration_name}"
+    fi
+  done
 }
 
 section "Application Deployment"
@@ -806,7 +887,8 @@ run_cmd "Applying Nginx configuration" bash -lc "ln -sf /etc/nginx/sites-availab
 
 note "Starting stack with Docker Compose..."
 cd "${DEPLOY_ROOT}"
-run_cmd "Building and starting containers" "${COMPOSE_CMD[@]}" --env-file .env up -d --build
+run_db_migrations
+run_cmd "Building and starting containers" "${COMPOSE_WITH_ENV[@]}" up -d --build
 
 section "Validation"
 note "Running post-deploy smoke checks..."
