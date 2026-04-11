@@ -24,8 +24,8 @@ services:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-smartestate}
       DB_HOST: postgres
     volumes:
-      - ./uploads:/app/uploads
-      - ./saved_models:/app/saved_models
+      - /opt/smartestate/uploads:/app/uploads
+      - /opt/smartestate/saved_models:/app/saved_models
     depends_on:
       - postgres
     ports:
