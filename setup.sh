@@ -811,6 +811,12 @@ note "Cloning or updating application repositories..."
 clone_or_pull "${BACKEND_REPO}" "${DEPLOY_ROOT}/smart-estate-backend"
 clone_or_pull "${DASHBOARD_REPO}" "${DEPLOY_ROOT}/smart-estate-dashboard"
 
+if command -v npx >/dev/null 2>&1 && [[ -f "${DEPLOY_ROOT}/smart-estate-dashboard/package.json" ]]; then
+  run_cmd "Updating Browserslist database" bash -lc "cd '${DEPLOY_ROOT}/smart-estate-dashboard' && npx update-browserslist-db@latest --yes"
+else
+  warn "Skipping Browserslist database update because npx or dashboard package.json was not found."
+fi
+
 if [[ ! -f "${DEPLOY_ROOT}/smart-estate-backend/Dockerfile" ]]; then
   fail "Backend Dockerfile missing in ${DEPLOY_ROOT}/smart-estate-backend"
 fi
