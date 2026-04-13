@@ -24,7 +24,7 @@ Supported OS:
 First-time install:
 
 ```bash
-git clone https://github.com/smartestate/smart-estate.git /opt/smartestate-deploy
+git clone https://github.com/smartestate/smart-estate-deploy.git /opt/smartestate-deploy
 cd /opt/smartestate-deploy
 chmod +x setup.sh
 sudo ./setup.sh
